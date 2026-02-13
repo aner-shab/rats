@@ -1,0 +1,11 @@
+/client/dist
+/client/node_modules
+
+
+/.env
+/.env.local
+/.env.development
+/.env.test
+/.env.production
+/.vscode
+.DS_Store
