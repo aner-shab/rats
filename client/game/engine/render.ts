@@ -66,23 +66,43 @@ export function renderViewport(
         color = "#aaa";
       }
       drawTile(px, py, color);
+    }
+  }
 
-      // Apply fog based on distance from player
-      if (fogged && visible) {
+  // Apply smooth radial fog overlay
+  if (fogged && visible) {
+    const playerPx = CANVAS.width / 2 + (me.renderX - viewportX) * TILE_SIZE;
+    const playerPy = CANVAS.height / 2 + (me.renderY - viewportY) * TILE_SIZE;
+    const centerX = playerPx + TILE_SIZE / 2;
+    const centerY = playerPy + TILE_SIZE / 2;
+    const gradient = CTX.createRadialGradient(centerX, centerY, TILE_SIZE * 1.5, centerX, centerY, TILE_SIZE * 2.5);
+    gradient.addColorStop(0, 'rgba(17, 17, 17, 0)');
+    gradient.addColorStop(0.7, 'rgba(17, 17, 17, 0.4)');
+    gradient.addColorStop(1, 'rgba(17, 17, 17, 0.8)');
+
+    CTX.fillStyle = gradient;
+    CTX.fillRect(0, 0, CANVAS.width, CANVAS.height);
+  }
+
+  // Draw per-tile fog for distant tiles
+  if (fogged && visible) {
+    for (let vy = 0; vy < VIEWPORT_SIZE; vy++) {
+      for (let vx = 0; vx < VIEWPORT_SIZE; vx++) {
+        const mx = Math.floor(viewportX) + vx - half;
+        const my = Math.floor(viewportY) + vy - half;
+        const px = CANVAS.width / 2 + (mx - viewportX) * TILE_SIZE;
+        const py = CANVAS.height / 2 + (my - viewportY) * TILE_SIZE;
+
         const dx = mx - me.x;
         const dy = my - me.y;
         const distance = Math.sqrt(dx * dx + dy * dy);
-        const fogStart = 1.5;
+        const fogStart = 1.8;
         const fogEnd = 2.5;
 
         if (distance > fogStart) {
-          const fogAlpha = Math.min(1, (distance - fogStart) / (fogEnd - fogStart)) * 0.7;
-
-          // Apply blur filter for fog effect
-          CTX.filter = 'blur(8px)';
+          const fogAlpha = Math.min(1, (distance - fogStart) / (fogEnd - fogStart)) * 0.5;
           CTX.fillStyle = `rgba(17, 17, 17, ${fogAlpha})`;
           CTX.fillRect(Math.floor(px), Math.floor(py), Math.ceil(TILE_SIZE), Math.ceil(TILE_SIZE));
-          CTX.filter = 'none';
         }
       }
     }
