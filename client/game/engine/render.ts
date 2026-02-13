@@ -1,6 +1,6 @@
 import { CANVAS, CTX, VIEWPORT_SIZE, CAMERA_SPEED, DEBUG } from "../constants";
 import { Player, Maze } from "../types";
-import { getVisibleTiles } from "../entities/maze"
+import { getVisibleTiles } from "../entities/maze";
 
 export function resizeCanvas() {
   CANVAS.width = window.innerWidth;
@@ -66,6 +66,25 @@ export function renderViewport(
         color = "#aaa";
       }
       drawTile(px, py, color);
+
+      // Apply fog based on distance from player
+      if (fogged && visible) {
+        const dx = mx - me.x;
+        const dy = my - me.y;
+        const distance = Math.sqrt(dx * dx + dy * dy);
+        const fogStart = 1.5;
+        const fogEnd = 2.5;
+
+        if (distance > fogStart) {
+          const fogAlpha = Math.min(1, (distance - fogStart) / (fogEnd - fogStart)) * 0.7;
+
+          // Apply blur filter for fog effect
+          CTX.filter = 'blur(8px)';
+          CTX.fillStyle = `rgba(17, 17, 17, ${fogAlpha})`;
+          CTX.fillRect(Math.floor(px), Math.floor(py), Math.ceil(TILE_SIZE), Math.ceil(TILE_SIZE));
+          CTX.filter = 'none';
+        }
+      }
     }
   }
 
@@ -73,5 +92,5 @@ export function renderViewport(
   const playerPx = CANVAS.width / 2 + (me.renderX - viewportX) * TILE_SIZE;
   const playerPy = CANVAS.height / 2 + (me.renderY - viewportY) * TILE_SIZE;
   CTX.fillStyle = "blue";
-  CTX.fillRect(playerPx, playerPy, TILE_SIZE / 2, TILE_SIZE / 2);
+  CTX.fillRect(playerPx + TILE_SIZE / 4, playerPy + TILE_SIZE / 4, TILE_SIZE / 2, TILE_SIZE / 2);
 }
