@@ -1,5 +1,5 @@
 import type { WebSocket } from "ws";
-import type { Player, Maze } from "../../shared/protocol.js";
+import type { Player, Maze } from "../../shared/protocol";
 import { readFileSync } from "fs";
 import { fileURLToPath } from "url";
 import { dirname, join } from "path";

@@ -9,12 +9,13 @@ export class NetworkManager {
     private onPlayerMovedCallback: ((playerId: string, x: number, y: number) => void) | null = null;
     private onPlayerLeftCallback: ((playerId: string) => void) | null = null;
 
-    connect(url: string): Promise<void> {
+    connect(url: string, sessionId: string): Promise<void> {
         return new Promise((resolve, reject) => {
-            this.ws = new WebSocket(url);
+            const wsUrl = `${url}/${sessionId}`;
+            this.ws = new WebSocket(wsUrl);
 
             this.ws.onopen = () => {
-                console.log("Connected to server");
+                console.log(`Connected to server (session: ${sessionId})`);
                 resolve();
             };
 

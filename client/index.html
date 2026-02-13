@@ -18,6 +18,55 @@
     canvas {
       display: block;
     }
+
+    #role {
+      position: absolute;
+      top: 20px;
+      left: 50%;
+      transform: translateX(-50%);
+      z-index: 1000;
+      display: flex;
+      gap: 10px;
+    }
+
+    #shareLink {
+      position: absolute;
+      top: 60px;
+      left: 50%;
+      transform: translateX(-50%);
+      z-index: 1000;
+      display: none;
+      background: rgba(0, 0, 0, 0.8);
+      padding: 10px;
+      border-radius: 5px;
+      color: white;
+      font-family: monospace;
+      font-size: 12px;
+    }
+
+    #shareLink.show {
+      display: block;
+    }
+
+    button {
+      padding: 10px 20px;
+      font-size: 14px;
+      cursor: pointer;
+      background: #333;
+      color: white;
+      border: 1px solid #555;
+      border-radius: 4px;
+    }
+
+    button:hover {
+      background: #444;
+    }
+
+    #copyBtn {
+      margin-left: 5px;
+      padding: 5px 10px;
+      font-size: 12px;
+    }
   </style>
 </head>
 
@@ -25,6 +74,11 @@
   <div id="role">
     <button id="controllerBtn">Controller</button>
     <button id="subjectBtn">Subject</button>
+    <button id="shareLinkBtn">Share Link</button>
+  </div>
+  <div id="shareLink">
+    <span id="linkText"></span>
+    <button id="copyBtn">Copy</button>
   </div>
   <canvas id="game"></canvas>
 

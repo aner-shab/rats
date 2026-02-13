@@ -1,7 +1,7 @@
 import Fastify from "fastify";
 import websocket from "@fastify/websocket";
-import { GameState } from "./game-state.js";
-import type { ClientMessage, ServerMessage } from "../../shared/protocol.js";
+import { SessionManager } from "./session-manager.js";
+import type { ClientMessage, ServerMessage } from "../../shared/protocol";
 import { randomBytes } from "crypto";
 
 const fastify = Fastify({
@@ -11,13 +11,15 @@ const fastify = Fastify({
 // Register WebSocket support
 await fastify.register(websocket);
 
-const gameState = new GameState();
+const sessionManager = new SessionManager();
 
-// WebSocket route
+// WebSocket route with session ID
 fastify.register(async (fastify) => {
-    fastify.get("/ws", { websocket: true }, (socket, req) => {
+    fastify.get("/ws/:sessionId", { websocket: true }, (socket, req) => {
+        const sessionId = (req.params as { sessionId: string }).sessionId;
+        const gameState = sessionManager.getOrCreateSession(sessionId);
         const playerId = randomBytes(16).toString("hex");
-        console.log(`Player ${playerId} connected`);
+        console.log(`Player ${playerId} connected to session ${sessionId}`);
 
         socket.on("message", (data) => {
             try {
@@ -113,6 +115,20 @@ fastify.register(async (fastify) => {
 // Health check endpoint
 fastify.get("/health", async () => {
     return { status: "ok" };
+});
+
+// Create new session endpoint
+fastify.post("/sessions", async () => {
+    const sessionId = sessionManager.createSession();
+    return { sessionId };
+});
+
+// Get active sessions
+fastify.get("/sessions", async () => {
+    return {
+        sessions: sessionManager.getActiveSessions(),
+        count: sessionManager.getSessionCount(),
+    };
 });
 
 // Start server

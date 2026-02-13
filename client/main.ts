@@ -5,6 +5,7 @@ import { renderViewport, resizeCanvas } from "./game/engine/render";
 import { CANVAS, VIEWPORT_SIZE, CAMERA_SPEED } from "./game/constants";
 import { Maze, Player, Role } from "./game/types";
 import { NetworkManager } from "./game/network/manager";
+import { generateMnemonicId } from "../shared/id-generator";
 
 let maze: Maze;
 let me: Player | null = null;
@@ -20,14 +21,36 @@ let networkManager: NetworkManager | null = null;
 const roleRef: { current: Role } = { current: role };
 const meRef: { current: Player | null } = { current: me };
 
+function getOrCreateSessionId(): string {
+  // Try to get session ID from URL query parameters
+  const params = new URLSearchParams(window.location.search);
+  let sessionId = params.get('s');
+
+  if (!sessionId) {
+    // Generate human-readable mnemonic ID
+    sessionId = generateMnemonicId();
+
+    // Update URL with new session ID
+    params.set('s', sessionId);
+    const newUrl = `${window.location.pathname}?${params.toString()}`;
+    window.history.replaceState({}, '', newUrl);
+  }
+
+  return sessionId;
+}
+
 async function init() {
   maze = await loadMaze("./maze.json");
+
+  // Get or create session ID from URL
+  const sessionId = getOrCreateSessionId();
+  console.log(`Session ID: ${sessionId}`);
 
   // Initialize network manager
   networkManager = new NetworkManager();
 
   try {
-    await networkManager.connect("ws://localhost:3001/ws");
+    await networkManager.connect("ws://localhost:3001/ws", sessionId);
     console.log("Connected to multiplayer server");
 
     // Setup network event handlers
@@ -130,6 +153,31 @@ async function init() {
       // Fallback to local mode
       me = spawnSubject(maze, subjects);
       meRef.current = me;
+    }
+  };
+
+  // Share link button handler
+  const shareLinkDiv = document.getElementById("shareLink")!;
+  const linkText = document.getElementById("linkText")!;
+  const shareLinkBtn = document.getElementById("shareLinkBtn")!;
+  const copyBtn = document.getElementById("copyBtn")!;
+
+  shareLinkBtn.onclick = () => {
+    const currentUrl = window.location.href;
+    linkText.textContent = currentUrl;
+    shareLinkDiv.classList.toggle("show");
+  };
+
+  copyBtn.onclick = async () => {
+    const currentUrl = window.location.href;
+    try {
+      await navigator.clipboard.writeText(currentUrl);
+      copyBtn.textContent = "Copied!";
+      setTimeout(() => {
+        copyBtn.textContent = "Copy";
+      }, 2000);
+    } catch (err) {
+      console.error("Failed to copy:", err);
     }
   };
 
