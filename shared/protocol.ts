@@ -11,7 +11,8 @@ export interface Player {
 export interface Maze {
     width: number;
     height: number;
-    tiles: string[][];
+    name: string;
+    tiles: string[];
 }
 
 // Client -> Server messages
@@ -21,7 +22,7 @@ export type ClientMessage =
 
 // Server -> Client messages
 export type ServerMessage =
-    | { type: "joined"; playerId: string; x: number; y: number; players: Player[] }
+    | { type: "joined"; playerId: string; x: number; y: number; players: Player[]; maze: Maze }
     | { type: "spawn-full" }
     | { type: "player-joined"; player: Player }
     | { type: "player-moved"; playerId: string; x: number; y: number }

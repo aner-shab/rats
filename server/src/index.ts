@@ -42,12 +42,15 @@ fastify.register(async (fastify) => {
                         }
 
                         // Send joined confirmation with all current players
+                        const maze = gameState.getMaze();
+                        console.log(`Sending maze to player: ${maze.name} (${maze.width}x${maze.height}, ${maze.tiles.length} tiles)`);
                         const joinedResponse: ServerMessage = {
                             type: "joined",
                             playerId: player.id,
                             x: player.x,
                             y: player.y,
                             players: gameState.getOtherPlayers(playerId),
+                            maze: maze,
                         };
                         socket.send(JSON.stringify(joinedResponse));
 

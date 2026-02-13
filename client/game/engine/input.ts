@@ -6,11 +6,11 @@ export function setupInput(
   roleRef: { current: Role },
   meRef: { current: Player | null },
   controllerViewport: Player,
-  maze: Maze,
+  mazeRef: { current: Maze | null },
   networkManager: NetworkManager | null
 ) {
   window.addEventListener("keydown", (e) => {
-    if (!roleRef.current) return;
+    if (!roleRef.current || !mazeRef.current) return;
 
     const dx = e.key === "ArrowRight" ? 1 : e.key === "ArrowLeft" ? -1 : 0;
     const dy = e.key === "ArrowDown" ? 1 : e.key === "ArrowUp" ? -1 : 0;
@@ -22,11 +22,11 @@ export function setupInput(
         networkManager.sendMove(dx, dy);
       } else {
         // Fallback to local move if no network
-        movePlayer(maze, meRef.current, dx, dy);
+        movePlayer(mazeRef.current, meRef.current, dx, dy);
       }
     }
     if (roleRef.current === "controller") {
-      movePlayer(maze, controllerViewport, dx, dy);
+      movePlayer(mazeRef.current, controllerViewport, dx, dy);
     }
   });
 }

@@ -1,9 +1,9 @@
-import type { ClientMessage, ServerMessage, Player } from "../../../shared/protocol";
+import type { ClientMessage, ServerMessage, Player, Maze } from "../../../shared/protocol";
 
 export class NetworkManager {
     private ws: WebSocket | null = null;
     private playerId: string | null = null;
-    private onJoinedCallback: ((playerId: string, x: number, y: number, players: Player[]) => void) | null = null;
+    private onJoinedCallback: ((playerId: string, x: number, y: number, players: Player[], maze: Maze) => void) | null = null;
     private onSpawnFullCallback: (() => void) | null = null;
     private onPlayerJoinedCallback: ((player: Player) => void) | null = null;
     private onPlayerMovedCallback: ((playerId: string, x: number, y: number) => void) | null = null;
@@ -44,7 +44,7 @@ export class NetworkManager {
             case "joined":
                 this.playerId = message.playerId;
                 if (this.onJoinedCallback) {
-                    this.onJoinedCallback(message.playerId, message.x, message.y, message.players);
+                    this.onJoinedCallback(message.playerId, message.x, message.y, message.players, message.maze);
                 }
                 break;
 
@@ -88,7 +88,7 @@ export class NetworkManager {
         this.sendMessage({ type: "move", dx, dy });
     }
 
-    onJoined(callback: (playerId: string, x: number, y: number, players: Player[]) => void): void {
+    onJoined(callback: (playerId: string, x: number, y: number, players: Player[], maze: Maze) => void): void {
         this.onJoinedCallback = callback;
     }
 

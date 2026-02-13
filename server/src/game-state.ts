@@ -7,16 +7,25 @@ import { dirname, join } from "path";
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 
+// Load all available mazes once at startup
+const mazesPath = join(__dirname, "../mazes.json");
+const mazesData = JSON.parse(readFileSync(mazesPath, "utf-8"));
+const availableMazes: Maze[] = mazesData.mazes;
+
 export class GameState {
     private players: Map<string, Player & { socket: WebSocket }> = new Map();
     private usedSpawnPoints: Set<string> = new Set();
     private maze: Maze;
 
     constructor() {
-        // Load maze from client directory
-        const mazePath = join(__dirname, "../../client/maze.json");
-        const mazeData = JSON.parse(readFileSync(mazePath, "utf-8"));
-        this.maze = mazeData;
+        // const randomIndex = Math.floor(Math.random() * availableMazes.length);
+        const randomIndex = 0;
+        this.maze = availableMazes[randomIndex];
+        console.log(`Selected maze: ${this.maze.name}`);
+    }
+
+    getMaze(): Maze {
+        return this.maze;
     }
 
     findAvailableSpawnPoint(): { x: number; y: number } | null {

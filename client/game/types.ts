@@ -3,7 +3,8 @@ export type Tile = "#" | "S" | string;
 export interface Maze {
   width: number;
   height: number;
-  tiles: Tile[][];
+  name?: string;
+  tiles: string[];
 }
 
 export interface Player {

@@ -1,4 +1,3 @@
-import { loadMaze } from "./game/entities/maze";
 import { spawnSubject } from "./game/entities/player";
 import { setupInput } from "./game/engine/input";
 import { renderViewport, resizeCanvas } from "./game/engine/render";
@@ -7,7 +6,7 @@ import { Maze, Player, Role } from "./game/types";
 import { NetworkManager } from "./game/network/manager";
 import { generateMnemonicId } from "../shared/id-generator";
 
-let maze: Maze;
+let maze: Maze | null = null;
 let me: Player | null = null;
 let subjects: Player[] = [];
 let remotePlayers: Map<string, Player> = new Map();
@@ -20,6 +19,7 @@ let networkManager: NetworkManager | null = null;
 // Use refs so input always sees latest values
 const roleRef: { current: Role } = { current: role };
 const meRef: { current: Player | null } = { current: me };
+const mazeRef: { current: Maze | null } = { current: null };
 
 function getOrCreateSessionId(): string {
   // Try to get session ID from URL query parameters
@@ -40,8 +40,6 @@ function getOrCreateSessionId(): string {
 }
 
 async function init() {
-  maze = await loadMaze("./maze.json");
-
   // Get or create session ID from URL
   const sessionId = getOrCreateSessionId();
   console.log(`Session ID: ${sessionId}`);
@@ -54,8 +52,21 @@ async function init() {
     console.log("Connected to multiplayer server");
 
     // Setup network event handlers
-    networkManager.onJoined((playerId, x, y, players) => {
+    networkManager.onJoined((playerId, x, y, players, receivedMaze) => {
       console.log(`Joined as ${playerId} at (${x}, ${y})`);
+      console.log("Received maze data:", receivedMaze);
+      console.log("Maze dimensions:", receivedMaze?.width, "x", receivedMaze?.height);
+      console.log("Maze tiles count:", receivedMaze?.tiles?.length);
+
+      // Receive maze from server
+      maze = receivedMaze;
+      mazeRef.current = receivedMaze;
+      console.log(`Received maze: ${receivedMaze.width}x${receivedMaze.height}`);
+
+      // Now set role to subject
+      role = "subject";
+      roleRef.current = role;
+
       me = { id: playerId, x, y, renderX: x, renderY: y };
       meRef.current = me;
       subjects.push(me);
@@ -134,6 +145,10 @@ async function init() {
   }
 
   document.getElementById("controllerBtn")!.onclick = () => {
+    if (!maze) {
+      alert("Waiting for maze data from server...");
+      return;
+    }
     role = "controller";
     roleRef.current = role;
     controllerViewport.x = Math.floor(maze.width / 2);
@@ -143,14 +158,18 @@ async function init() {
   };
 
   document.getElementById("subjectBtn")!.onclick = () => {
-    role = "subject";
-    roleRef.current = role;
-
     if (networkManager) {
-      // Join multiplayer
+      // Join multiplayer - maze will be received after joining
+      console.log("Joining as subject...");
       networkManager.joinAsSubject();
     } else {
       // Fallback to local mode
+      if (!maze) {
+        alert("No maze available in offline mode");
+        return;
+      }
+      role = "subject";
+      roleRef.current = role;
       me = spawnSubject(maze, subjects);
       meRef.current = me;
     }
@@ -181,7 +200,7 @@ async function init() {
     }
   };
 
-  setupInput(roleRef, meRef, controllerViewport, maze, networkManager);
+  setupInput(roleRef, meRef, controllerViewport, mazeRef, networkManager);
   window.addEventListener("resize", resizeCanvas);
   resizeCanvas();
 
@@ -189,12 +208,13 @@ async function init() {
 }
 
 function loop() {
-  if (!role) {
+  if (!role || !maze) {
     const CTX = CANVAS.getContext("2d")!;
     CTX.fillStyle = "#222";
     CTX.fillRect(0, 0, CANVAS.width, CANVAS.height);
     CTX.fillStyle = "white";
-    CTX.fillText("Choose a role to begin", 180, 280);
+    const message = !role ? "Choose a role to begin" : "Waiting for maze data...";
+    CTX.fillText(message, 180, 280);
     requestAnimationFrame(loop);
     return;
   }
