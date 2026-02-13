@@ -7,6 +7,7 @@ export interface Maze {
 }
 
 export interface Player {
+  id?: string; // Optional for backward compatibility
   x: number;
   y: number;
   renderX: number;
@@ -15,4 +16,4 @@ export interface Player {
 
 export type Role = "controller" | "subject" | null;
 
-export interface ControllerViewport extends Player {}
+export interface ControllerViewport extends Player { }

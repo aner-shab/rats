@@ -1,0 +1,129 @@
+import Fastify from "fastify";
+import websocket from "@fastify/websocket";
+import { GameState } from "./game-state.js";
+import type { ClientMessage, ServerMessage } from "../../shared/protocol.js";
+import { randomBytes } from "crypto";
+
+const fastify = Fastify({
+    logger: true,
+});
+
+// Register WebSocket support
+await fastify.register(websocket);
+
+const gameState = new GameState();
+
+// WebSocket route
+fastify.register(async (fastify) => {
+    fastify.get("/ws", { websocket: true }, (socket, req) => {
+        const playerId = randomBytes(16).toString("hex");
+        console.log(`Player ${playerId} connected`);
+
+        socket.on("message", (data) => {
+            try {
+                const message: ClientMessage = JSON.parse(data.toString());
+
+                switch (message.type) {
+                    case "join": {
+                        if (message.role !== "subject") {
+                            // Only subjects join multiplayer for now
+                            return;
+                        }
+
+                        const player = gameState.addPlayer(playerId, socket);
+
+                        if (!player) {
+                            const response: ServerMessage = { type: "spawn-full" };
+                            socket.send(JSON.stringify(response));
+                            console.log(`No spawn points available for player ${playerId}`);
+                            return;
+                        }
+
+                        // Send joined confirmation with all current players
+                        const joinedResponse: ServerMessage = {
+                            type: "joined",
+                            playerId: player.id,
+                            x: player.x,
+                            y: player.y,
+                            players: gameState.getOtherPlayers(playerId),
+                        };
+                        socket.send(JSON.stringify(joinedResponse));
+
+                        // Notify other players
+                        const playerJoinedMessage: ServerMessage = {
+                            type: "player-joined",
+                            player: {
+                                id: player.id,
+                                x: player.x,
+                                y: player.y,
+                                renderX: player.x,
+                                renderY: player.y,
+                            },
+                        };
+                        gameState.broadcastToOthers(playerId, playerJoinedMessage);
+
+                        console.log(
+                            `Player ${playerId} spawned at (${player.x}, ${player.y})`
+                        );
+                        break;
+                    }
+
+                    case "move": {
+                        const moved = gameState.movePlayer(playerId, message.dx, message.dy);
+
+                        if (moved) {
+                            const player = gameState.getPlayer(playerId);
+                            if (player) {
+                                // Broadcast movement to all players (including sender for confirmation)
+                                const moveMessage: ServerMessage = {
+                                    type: "player-moved",
+                                    playerId: player.id,
+                                    x: player.x,
+                                    y: player.y,
+                                };
+                                gameState.broadcastToAll(moveMessage);
+                                console.log(`Player ${playerId} moved to (${player.x}, ${player.y})`);
+                            }
+                        }
+                        break;
+                    }
+                }
+            } catch (error) {
+                console.error("Error processing message:", error);
+            }
+        });
+
+        socket.on("close", () => {
+            console.log(`Player ${playerId} disconnected`);
+            gameState.removePlayer(playerId);
+
+            const playerLeftMessage: ServerMessage = {
+                type: "player-left",
+                playerId,
+            };
+            gameState.broadcastToAll(playerLeftMessage);
+        });
+
+        socket.on("error", (error) => {
+            console.error(`WebSocket error for player ${playerId}:`, error);
+        });
+    });
+});
+
+// Health check endpoint
+fastify.get("/health", async () => {
+    return { status: "ok" };
+});
+
+// Start server
+const start = async () => {
+    try {
+        await fastify.listen({ port: 3001, host: "0.0.0.0" });
+        console.log("Server listening on http://localhost:3001");
+    } catch (err) {
+        fastify.log.error(err);
+        process.exit(1);
+    }
+};
+
+start();

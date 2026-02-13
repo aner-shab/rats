@@ -108,9 +108,23 @@ export function renderViewport(
     }
   }
 
-  // Draw main player
-  const playerPx = CANVAS.width / 2 + (me.renderX - viewportX) * TILE_SIZE;
-  const playerPy = CANVAS.height / 2 + (me.renderY - viewportY) * TILE_SIZE;
-  CTX.fillStyle = "blue";
-  CTX.fillRect(playerPx + TILE_SIZE / 4, playerPy + TILE_SIZE / 4, TILE_SIZE / 2, TILE_SIZE / 2);
+  // Draw all subjects (including other players)
+  subjects.forEach((subject) => {
+    const subjectPx = CANVAS.width / 2 + (subject.renderX - viewportX) * TILE_SIZE;
+    const subjectPy = CANVAS.height / 2 + (subject.renderY - viewportY) * TILE_SIZE;
+
+    // Check if subject is visible (for fogged mode)
+    if (fogged && visible) {
+      const subjectX = Math.floor(subject.renderX);
+      const subjectY = Math.floor(subject.renderY);
+      if (!visible.has(`${subjectX},${subjectY}`)) {
+        return; // Skip drawing if not visible
+      }
+    }
+
+    // Draw self as blue, others as red
+    const isMe = subject === me || subject.id === me.id;
+    CTX.fillStyle = isMe ? "blue" : "red";
+    CTX.fillRect(subjectPx + TILE_SIZE / 4, subjectPy + TILE_SIZE / 4, TILE_SIZE / 2, TILE_SIZE / 2);
+  });
 }

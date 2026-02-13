@@ -1,11 +1,13 @@
 import { movePlayer } from "../entities/player";
 import { Player, Role, Maze } from "../types";
+import { NetworkManager } from "../network/manager";
 
 export function setupInput(
   roleRef: { current: Role },
   meRef: { current: Player | null },
   controllerViewport: Player,
-  maze: Maze
+  maze: Maze,
+  networkManager: NetworkManager | null
 ) {
   window.addEventListener("keydown", (e) => {
     if (!roleRef.current) return;
@@ -15,7 +17,13 @@ export function setupInput(
     if (!dx && !dy) return;
 
     if (roleRef.current === "subject" && meRef.current) {
-      movePlayer(maze, meRef.current, dx, dy);
+      // Send move to server instead of local move
+      if (networkManager) {
+        networkManager.sendMove(dx, dy);
+      } else {
+        // Fallback to local move if no network
+        movePlayer(maze, meRef.current, dx, dy);
+      }
     }
     if (roleRef.current === "controller") {
       movePlayer(maze, controllerViewport, dx, dy);
