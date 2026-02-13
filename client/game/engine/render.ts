@@ -1,0 +1,77 @@
+import { CANVAS, CTX, VIEWPORT_SIZE, CAMERA_SPEED, DEBUG } from "../constants";
+import { Player, Maze } from "../types";
+import { getVisibleTiles } from "../entities/maze"
+
+export function resizeCanvas() {
+  CANVAS.width = window.innerWidth;
+  CANVAS.height = window.innerHeight;
+}
+
+export function getTileSize() {
+  return Math.floor(Math.min(CANVAS.width, CANVAS.height) / VIEWPORT_SIZE);
+}
+
+export function drawTile(x: number, y: number, color: string) {
+  CTX.fillStyle = color;
+  const TILE_SIZE = getTileSize();
+  CTX.fillRect(Math.floor(x), Math.floor(y), Math.ceil(TILE_SIZE), Math.ceil(TILE_SIZE));
+}
+
+export function renderViewport(
+  maze: Maze,
+  viewportX: number,
+  viewportY: number,
+  me: Player,
+  subjects: Player[],
+  fogged: boolean
+) {
+  CTX.clearRect(0, 0, CANVAS.width, CANVAS.height);
+
+  const TILE_SIZE = getTileSize();
+  const half = Math.floor(VIEWPORT_SIZE / 2);
+  const visible = fogged ? getVisibleTiles(maze, me.x, me.y, 2) : null;
+
+  function isWallAdjacent(mx: number, my: number) {
+    if (!visible) return false;
+    const neighbors = [
+      { x: mx + 1, y: my },
+      { x: mx - 1, y: my },
+      { x: mx, y: my + 1 },
+      { x: mx, y: my - 1 },
+    ];
+    return neighbors.some((n) => visible.has(`${n.x},${n.y}`));
+  }
+
+  for (let vy = 0; vy < VIEWPORT_SIZE; vy++) {
+    for (let vx = 0; vx < VIEWPORT_SIZE; vx++) {
+      const mx = Math.floor(viewportX) + vx - half;
+      const my = Math.floor(viewportY) + vy - half;
+      const px = CANVAS.width / 2 + (mx - viewportX) * TILE_SIZE;
+      const py = CANVAS.height / 2 + (my - viewportY) * TILE_SIZE;
+      const tile = maze.tiles[my]?.[mx];
+
+      if (!tile) {
+        drawTile(px, py, "#111");
+        continue;
+      }
+
+      let color: string;
+      if (tile === "#") {
+        color = fogged && isWallAdjacent(mx, my) ? "#504630" : "#111";
+      } else {
+        if (visible && !visible.has(`${mx},${my}`)) {
+          drawTile(px, py, "#111");
+          continue;
+        }
+        color = "#aaa";
+      }
+      drawTile(px, py, color);
+    }
+  }
+
+  // Draw main player
+  const playerPx = CANVAS.width / 2 + (me.renderX - viewportX) * TILE_SIZE;
+  const playerPy = CANVAS.height / 2 + (me.renderY - viewportY) * TILE_SIZE;
+  CTX.fillStyle = "blue";
+  CTX.fillRect(playerPx, playerPy, TILE_SIZE / 2, TILE_SIZE / 2);
+}
