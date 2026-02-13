@@ -42,6 +42,7 @@ export function renderViewport(
     return neighbors.some((n) => visible.has(`${n.x},${n.y}`));
   }
 
+  // Draw visible tiles (skip black out-of-view tiles for now)
   for (let vy = 0; vy < VIEWPORT_SIZE; vy++) {
     for (let vx = 0; vx < VIEWPORT_SIZE; vx++) {
       const mx = Math.floor(viewportX) + vx - half;
@@ -51,7 +52,9 @@ export function renderViewport(
       const tile = maze.tiles[my]?.[mx];
 
       if (!tile) {
-        drawTile(px, py, "#111");
+        if (!fogged) {
+          drawTile(px, py, "#111");
+        }
         continue;
       }
 
@@ -60,7 +63,7 @@ export function renderViewport(
         color = fogged && isWallAdjacent(mx, my) ? "#504630" : "#111";
       } else {
         if (visible && !visible.has(`${mx},${my}`)) {
-          drawTile(px, py, "#111");
+          // Skip black tiles for now, draw them after subjects
           continue;
         }
         color = "#aaa";
@@ -113,18 +116,51 @@ export function renderViewport(
     const subjectPx = CANVAS.width / 2 + (subject.renderX - viewportX) * TILE_SIZE;
     const subjectPy = CANVAS.height / 2 + (subject.renderY - viewportY) * TILE_SIZE;
 
-    // Check if subject is visible (for fogged mode)
+    // Calculate distance-based fade for other players
+    let alpha = 1.0;
     if (fogged && visible) {
-      const subjectX = Math.floor(subject.renderX);
-      const subjectY = Math.floor(subject.renderY);
-      if (!visible.has(`${subjectX},${subjectY}`)) {
-        return; // Skip drawing if not visible
+      const isMe = subject === me || subject.id === me.id;
+      if (!isMe) {
+        const dx = subject.renderX - me.x;
+        const dy = subject.renderY - me.y;
+        const distance = Math.sqrt(dx * dx + dy * dy);
+
+        // Fade starts at distance 1.5, fully faded at 2.5
+        const fadeStart = 1.5;
+        const fadeEnd = 2.5;
+
+        if (distance > fadeStart) {
+          alpha = Math.max(0, 1 - (distance - fadeStart) / (fadeEnd - fadeStart));
+        }
       }
     }
 
     // Draw self as blue, others as red
     const isMe = subject === me || subject.id === me.id;
-    CTX.fillStyle = isMe ? "blue" : "red";
+    const baseColor = isMe ? "blue" : "red";
+
+    // Apply alpha for fade effect
+    CTX.globalAlpha = alpha;
+    CTX.fillStyle = baseColor;
     CTX.fillRect(subjectPx + TILE_SIZE / 4, subjectPy + TILE_SIZE / 4, TILE_SIZE / 2, TILE_SIZE / 2);
+    CTX.globalAlpha = 1.0; // Reset alpha
   });
+
+  // Draw black tiles on top of non-visible areas (covering subjects)
+  if (fogged && visible) {
+    for (let vy = 0; vy < VIEWPORT_SIZE; vy++) {
+      for (let vx = 0; vx < VIEWPORT_SIZE; vx++) {
+        const mx = Math.floor(viewportX) + vx - half;
+        const my = Math.floor(viewportY) + vy - half;
+        const px = CANVAS.width / 2 + (mx - viewportX) * TILE_SIZE;
+        const py = CANVAS.height / 2 + (my - viewportY) * TILE_SIZE;
+        const tile = maze.tiles[my]?.[mx];
+
+        // Draw black tiles for out-of-view areas
+        if (!tile || (tile !== "#" && !visible.has(`${mx},${my}`))) {
+          drawTile(px, py, "#111");
+        }
+      }
+    }
+  }
 }
