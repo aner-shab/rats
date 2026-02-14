@@ -27,11 +27,25 @@ fastify.register(async (fastify) => {
 
                 switch (message.type) {
                     case "join": {
-                        if (message.role !== "subject") {
-                            // Only subjects join multiplayer for now
-                            return;
+                        const maze = gameState.getMaze();
+                        console.log(`Sending maze to ${message.role}: ${maze.name} (${maze.width}x${maze.height}, ${maze.tiles.length} tiles)`);
+
+                        if (message.role === "controller") {
+                            // Controllers only need maze data, they don't spawn as players
+                            const joinedResponse: ServerMessage = {
+                                type: "joined",
+                                playerId: playerId,
+                                x: 0,
+                                y: 0,
+                                players: [],
+                                maze: maze,
+                            };
+                            socket.send(JSON.stringify(joinedResponse));
+                            console.log(`Controller ${playerId} connected`);
+                            break;
                         }
 
+                        // Subject joins as a player
                         const player = gameState.addPlayer(playerId, socket);
 
                         if (!player) {
@@ -42,8 +56,6 @@ fastify.register(async (fastify) => {
                         }
 
                         // Send joined confirmation with all current players
-                        const maze = gameState.getMaze();
-                        console.log(`Sending maze to player: ${maze.name} (${maze.width}x${maze.height}, ${maze.tiles.length} tiles)`);
                         const joinedResponse: ServerMessage = {
                             type: "joined",
                             playerId: player.id,

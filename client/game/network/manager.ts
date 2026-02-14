@@ -84,6 +84,10 @@ export class NetworkManager {
         this.sendMessage({ type: "join", role: "subject" });
     }
 
+    joinAsController(): void {
+        this.sendMessage({ type: "join", role: "controller" });
+    }
+
     sendMove(dx: number, dy: number): void {
         this.sendMessage({ type: "move", dx, dy });
     }

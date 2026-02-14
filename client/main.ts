@@ -63,19 +63,32 @@ async function init() {
       mazeRef.current = receivedMaze;
       console.log(`Received maze: ${receivedMaze.width}x${receivedMaze.height}`);
 
-      // Now set role to subject
-      role = "subject";
-      roleRef.current = role;
+      // Determine role based on whether we have a valid spawn position
+      if (x === 0 && y === 0 && players.length === 0) {
+        // Controller joined (no spawn position)
+        role = "controller";
+        roleRef.current = role;
+        controllerViewport.x = Math.floor(maze.width / 2);
+        controllerViewport.y = Math.floor(maze.height / 2);
+        controllerViewport.renderX = controllerViewport.x;
+        controllerViewport.renderY = controllerViewport.y;
+        console.log("Joined as controller");
+      } else {
+        // Subject joined (has spawn position)
+        role = "subject";
+        roleRef.current = role;
 
-      me = { id: playerId, x, y, renderX: x, renderY: y };
-      meRef.current = me;
-      subjects.push(me);
+        me = { id: playerId, x, y, renderX: x, renderY: y };
+        meRef.current = me;
+        subjects.push(me);
 
-      // Add existing players
-      players.forEach((player) => {
-        remotePlayers.set(player.id!, player);
-        subjects.push(player);
-      });
+        // Add existing players
+        players.forEach((player) => {
+          remotePlayers.set(player.id!, player);
+          subjects.push(player);
+        });
+        console.log("Joined as subject");
+      }
     });
 
     networkManager.onSpawnFull(() => {
@@ -145,16 +158,24 @@ async function init() {
   }
 
   document.getElementById("controllerBtn")!.onclick = () => {
-    if (!maze) {
-      alert("Waiting for maze data from server...");
-      return;
+    if (networkManager) {
+      // Join multiplayer as controller - maze will be received after joining
+      console.log("Joining as controller...");
+      networkManager.joinAsController();
+      // Role will be set when maze data is received in onJoined callback
+    } else {
+      // Fallback to local mode
+      if (!maze) {
+        alert("No maze available in offline mode");
+        return;
+      }
+      role = "controller";
+      roleRef.current = role;
+      controllerViewport.x = Math.floor(maze.width / 2);
+      controllerViewport.y = Math.floor(maze.height / 2);
+      controllerViewport.renderX = controllerViewport.x;
+      controllerViewport.renderY = controllerViewport.y;
     }
-    role = "controller";
-    roleRef.current = role;
-    controllerViewport.x = Math.floor(maze.width / 2);
-    controllerViewport.y = Math.floor(maze.height / 2);
-    controllerViewport.renderX = controllerViewport.x;
-    controllerViewport.renderY = controllerViewport.y;
   };
 
   document.getElementById("subjectBtn")!.onclick = () => {

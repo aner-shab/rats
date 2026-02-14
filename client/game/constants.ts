@@ -1,4 +1,5 @@
-export const VIEWPORT_SIZE = 11; // 11x11 tiles
+export const VIEWPORT_SIZE = 11; // 11x11 tiles for subjects
+export const CONTROLLER_VIEWPORT_SIZE = 22; // Larger view for controller
 export const CAMERA_SPEED = 0.1; // lerp factor (0-1)
 export const MOVE_DURATION = 150; // ms
 export const DEBUG = false;

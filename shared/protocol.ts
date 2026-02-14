@@ -17,7 +17,7 @@ export interface Maze {
 
 // Client -> Server messages
 export type ClientMessage =
-    | { type: "join"; role: "subject" }
+    | { type: "join"; role: "subject" | "controller" }
     | { type: "move"; dx: number; dy: number };
 
 // Server -> Client messages
