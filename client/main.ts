@@ -103,12 +103,24 @@ async function init() {
 
     networkManager.onPlayerJoined((player) => {
       console.log(`Player ${player.id} joined at (${player.x}, ${player.y})`);
+
+      // Always update remotePlayers with the new player object
       remotePlayers.set(player.id!, player);
-      subjects.push(player);
+
+      // Find if player already exists in subjects
+      const existingIndex = subjects.findIndex(s => s.id === player.id);
+
+      if (existingIndex >= 0) {
+        // Replace with the new player object reference
+        subjects[existingIndex] = player;
+      } else {
+        // Add new player
+        subjects.push(player);
+      }
     });
 
     networkManager.onPlayerMoved((playerId, x, y) => {
-      // Find and update the player
+      // Find and update the player in remotePlayers
       const player = remotePlayers.get(playerId);
       if (player) {
         // Smooth movement animation
@@ -128,6 +140,12 @@ async function init() {
         }
 
         requestAnimationFrame(animate);
+
+        // Also ensure the player in subjects array is the same reference
+        const subjectIndex = subjects.findIndex(s => s.id === playerId);
+        if (subjectIndex >= 0 && subjects[subjectIndex] !== player) {
+          subjects[subjectIndex] = player;
+        }
       } else if (me && me.id === playerId) {
         // Update own position (server confirmation)
         const startX = me.renderX;
@@ -151,11 +169,10 @@ async function init() {
 
     networkManager.onPlayerLeft((playerId) => {
       console.log(`Player ${playerId} left`);
-      const player = remotePlayers.get(playerId);
-      if (player) {
-        subjects = subjects.filter((s) => s.id !== playerId);
-        remotePlayers.delete(playerId);
-      }
+      // Always remove from subjects (what controller sees)
+      subjects = subjects.filter((s) => s.id !== playerId);
+      // Remove from remote players map
+      remotePlayers.delete(playerId);
     });
   } catch (error) {
     console.error("Failed to connect to server:", error);

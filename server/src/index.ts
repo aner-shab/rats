@@ -2,7 +2,6 @@ import Fastify from "fastify";
 import websocket from "@fastify/websocket";
 import { SessionManager } from "./session-manager.js";
 import type { ClientMessage, ServerMessage } from "../../shared/protocol";
-import { randomBytes } from "crypto";
 
 const fastify = Fastify({
     logger: true,
@@ -18,8 +17,9 @@ fastify.register(async (fastify) => {
     fastify.get("/ws/:sessionId", { websocket: true }, (socket, req) => {
         const sessionId = (req.params as { sessionId: string }).sessionId;
         const gameState = sessionManager.getOrCreateSession(sessionId);
-        const playerId = randomBytes(16).toString("hex");
-        console.log(`Player ${playerId} connected to session ${sessionId}`);
+        let playerId: string | null = null;
+        let playerRole: "subject" | "controller" | null = null;
+        console.log(`New connection to session ${sessionId}`);
 
         socket.on("message", (data) => {
             try {
@@ -27,6 +27,11 @@ fastify.register(async (fastify) => {
 
                 switch (message.type) {
                     case "join": {
+                        // Use the persistent ID from the client
+                        playerId = message.persistentId;
+                        playerRole = message.role;
+                        console.log(`Player ${playerId} joined session ${sessionId} as ${message.role}`);
+
                         const maze = gameState.getMaze();
                         console.log(`Sending maze to ${message.role}: ${maze.name} (${maze.width}x${maze.height}, ${maze.tiles.length} tiles)`);
 
@@ -87,6 +92,11 @@ fastify.register(async (fastify) => {
                     }
 
                     case "move": {
+                        if (!playerId) {
+                            console.warn("Received move from player who hasn't joined yet");
+                            return;
+                        }
+
                         const moved = gameState.movePlayer(playerId, message.dx, message.dy);
 
                         if (moved) {
@@ -112,15 +122,28 @@ fastify.register(async (fastify) => {
         });
 
         socket.on("close", () => {
-            console.log(`Player ${playerId} disconnected`);
-            gameState.removePlayer(playerId);
-            gameState.removeController(playerId);
+            if (!playerId) {
+                console.log("Connection closed before player joined");
+                return;
+            }
 
-            const playerLeftMessage: ServerMessage = {
-                type: "player-left",
-                playerId,
-            };
-            gameState.broadcastToAll(playerLeftMessage);
+            console.log(`Player ${playerId} (${playerRole}) disconnected`);
+
+            // Only remove from the appropriate collection based on role
+            if (playerRole === "subject") {
+                gameState.removePlayer(playerId);
+            } else if (playerRole === "controller") {
+                gameState.removeController(socket);
+            }
+
+            // Only broadcast player-left if they were a subject (actual player)
+            if (playerRole === "subject") {
+                const playerLeftMessage: ServerMessage = {
+                    type: "player-left",
+                    playerId,
+                };
+                gameState.broadcastToAll(playerLeftMessage);
+            }
         });
 
         socket.on("error", (error) => {

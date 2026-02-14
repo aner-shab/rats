@@ -14,9 +14,10 @@ const availableMazes: Maze[] = mazesData.mazes;
 
 export class GameState {
     private players: Map<string, Player & { socket: WebSocket }> = new Map();
-    private controllers: Map<string, WebSocket> = new Map();
+    private controllers: Set<WebSocket> = new Set();
     private usedSpawnPoints: Set<string> = new Set();
     private maze: Maze;
+    private disconnectedPlayers: Map<string, Player> = new Map();
 
     constructor() {
         // const randomIndex = Math.floor(Math.random() * availableMazes.length);
@@ -45,14 +46,36 @@ export class GameState {
     }
 
     addController(controllerId: string, socket: WebSocket): void {
-        this.controllers.set(controllerId, socket);
+        this.controllers.add(socket);
     }
 
-    removeController(controllerId: string): void {
-        this.controllers.delete(controllerId);
+    removeController(socket: WebSocket): void {
+        this.controllers.delete(socket);
     }
 
     addPlayer(playerId: string, socket: WebSocket): Player | null {
+        // Check if player is already connected (shouldn't happen, but handle it)
+        const existingPlayer = this.players.get(playerId);
+        if (existingPlayer) {
+            console.warn(`Player ${playerId} is already connected, updating socket`);
+            existingPlayer.socket = socket;
+            return existingPlayer;
+        }
+
+        // Check if player was previously disconnected and restore their position
+        const disconnectedPlayer = this.disconnectedPlayers.get(playerId);
+        if (disconnectedPlayer) {
+            console.log(`Restoring player ${playerId} at (${disconnectedPlayer.x}, ${disconnectedPlayer.y})`);
+            const player: Player & { socket: WebSocket } = {
+                ...disconnectedPlayer,
+                socket,
+            };
+            this.players.set(playerId, player);
+            this.disconnectedPlayers.delete(playerId);
+            return player;
+        }
+
+        // New player - find a spawn point
         const spawn = this.findAvailableSpawnPoint();
         if (!spawn) return null;
 
@@ -72,12 +95,11 @@ export class GameState {
     removePlayer(playerId: string): void {
         const player = this.players.get(playerId);
         if (player) {
-            const spawnKey = `${player.x},${player.y}`;
-            // Only free if player is still at spawn
-            const hasntMoved = player.x === player.renderX && player.y === player.renderY;
-            if (hasntMoved) {
-                this.usedSpawnPoints.delete(spawnKey);
-            }
+            // Save player state for potential reconnection
+            const { socket, ...playerState } = player;
+            this.disconnectedPlayers.set(playerId, playerState);
+            console.log(`Saved state for disconnected player ${playerId} at (${playerState.x}, ${playerState.y})`);
+
             this.players.delete(playerId);
         }
     }

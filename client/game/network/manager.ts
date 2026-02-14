@@ -1,13 +1,19 @@
 import type { ClientMessage, ServerMessage, Player, Maze } from "../../../shared/protocol";
+import { getPersistentPlayerId } from "./persistent-id";
 
 export class NetworkManager {
     private ws: WebSocket | null = null;
     private playerId: string | null = null;
+    private persistentId: string;
     private onJoinedCallback: ((playerId: string, x: number, y: number, players: Player[], maze: Maze) => void) | null = null;
     private onSpawnFullCallback: (() => void) | null = null;
     private onPlayerJoinedCallback: ((player: Player) => void) | null = null;
     private onPlayerMovedCallback: ((playerId: string, x: number, y: number) => void) | null = null;
     private onPlayerLeftCallback: ((playerId: string) => void) | null = null;
+
+    constructor() {
+        this.persistentId = getPersistentPlayerId();
+    }
 
     connect(url: string, sessionId: string): Promise<void> {
         return new Promise((resolve, reject) => {
@@ -81,11 +87,11 @@ export class NetworkManager {
     }
 
     joinAsSubject(): void {
-        this.sendMessage({ type: "join", role: "subject" });
+        this.sendMessage({ type: "join", role: "subject", persistentId: this.persistentId });
     }
 
     joinAsController(): void {
-        this.sendMessage({ type: "join", role: "controller" });
+        this.sendMessage({ type: "join", role: "controller", persistentId: this.persistentId });
     }
 
     sendMove(dx: number, dy: number): void {
