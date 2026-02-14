@@ -26,7 +26,11 @@ export function setupInput(
       }
     }
     if (roleRef.current === "controller") {
-      movePlayer(mazeRef.current, controllerViewport, dx, dy);
+      // Controllers can move freely without collision detection
+      controllerViewport.x += dx;
+      controllerViewport.y += dy;
+      controllerViewport.renderX = controllerViewport.x;
+      controllerViewport.renderY = controllerViewport.y;
     }
   });
 }

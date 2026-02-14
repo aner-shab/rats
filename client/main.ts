@@ -1,7 +1,7 @@
 import { spawnSubject } from "./game/entities/player";
 import { setupInput } from "./game/engine/input";
 import { renderViewport, resizeCanvas } from "./game/engine/render";
-import { CANVAS, VIEWPORT_SIZE, CAMERA_SPEED } from "./game/constants";
+import { CANVAS, VIEWPORT_SIZE, CONTROLLER_VIEWPORT_SIZE, CAMERA_SPEED } from "./game/constants";
 import { Maze, Player, Role } from "./game/types";
 import { NetworkManager } from "./game/network/manager";
 import { generateMnemonicId } from "../shared/id-generator";
@@ -64,7 +64,7 @@ async function init() {
       console.log(`Received maze: ${receivedMaze.width}x${receivedMaze.height}`);
 
       // Determine role based on whether we have a valid spawn position
-      if (x === 0 && y === 0 && players.length === 0) {
+      if (x === 0 && y === 0) {
         // Controller joined (no spawn position)
         role = "controller";
         roleRef.current = role;
@@ -72,7 +72,13 @@ async function init() {
         controllerViewport.y = Math.floor(maze.height / 2);
         controllerViewport.renderX = controllerViewport.x;
         controllerViewport.renderY = controllerViewport.y;
-        console.log("Joined as controller");
+
+        // Add all existing players to subjects list for controller view
+        players.forEach((player) => {
+          remotePlayers.set(player.id!, player);
+          subjects.push(player);
+        });
+        console.log(`Joined as controller, watching ${players.length} players`);
       } else {
         // Subject joined (has spawn position)
         role = "subject";
@@ -243,13 +249,13 @@ function loop() {
   if (role === "controller") {
     viewportX += (controllerViewport.renderX - viewportX) * CAMERA_SPEED;
     viewportY += (controllerViewport.renderY - viewportY) * CAMERA_SPEED;
-    renderViewport(maze, viewportX, viewportY, controllerViewport, subjects, false);
+    renderViewport(maze, viewportX, viewportY, controllerViewport, subjects, false, CONTROLLER_VIEWPORT_SIZE);
   }
 
   if (role === "subject" && me) {
     viewportX += (me.renderX - viewportX) * CAMERA_SPEED;
     viewportY += (me.renderY - viewportY) * CAMERA_SPEED;
-    renderViewport(maze, viewportX, viewportY, me, subjects, true);
+    renderViewport(maze, viewportX, viewportY, me, subjects, true, VIEWPORT_SIZE);
   }
 
   requestAnimationFrame(loop);

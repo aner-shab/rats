@@ -31,13 +31,14 @@ fastify.register(async (fastify) => {
                         console.log(`Sending maze to ${message.role}: ${maze.name} (${maze.width}x${maze.height}, ${maze.tiles.length} tiles)`);
 
                         if (message.role === "controller") {
-                            // Controllers only need maze data, they don't spawn as players
+                            // Controllers only need maze data and player list, they don't spawn as players
+                            gameState.addController(playerId, socket);
                             const joinedResponse: ServerMessage = {
                                 type: "joined",
                                 playerId: playerId,
                                 x: 0,
                                 y: 0,
-                                players: [],
+                                players: gameState.getAllPlayers(),
                                 maze: maze,
                             };
                             socket.send(JSON.stringify(joinedResponse));
@@ -113,6 +114,7 @@ fastify.register(async (fastify) => {
         socket.on("close", () => {
             console.log(`Player ${playerId} disconnected`);
             gameState.removePlayer(playerId);
+            gameState.removeController(playerId);
 
             const playerLeftMessage: ServerMessage = {
                 type: "player-left",

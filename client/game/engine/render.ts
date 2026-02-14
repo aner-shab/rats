@@ -7,14 +7,13 @@ export function resizeCanvas() {
   CANVAS.height = window.innerHeight;
 }
 
-export function getTileSize() {
-  return Math.floor(Math.min(CANVAS.width, CANVAS.height) / VIEWPORT_SIZE);
+export function getTileSize(viewportSize: number = VIEWPORT_SIZE) {
+  return Math.floor(Math.min(CANVAS.width, CANVAS.height) / viewportSize);
 }
 
-export function drawTile(x: number, y: number, color: string) {
+export function drawTile(x: number, y: number, color: string, tileSize: number) {
   CTX.fillStyle = color;
-  const TILE_SIZE = getTileSize();
-  CTX.fillRect(Math.floor(x), Math.floor(y), Math.ceil(TILE_SIZE), Math.ceil(TILE_SIZE));
+  CTX.fillRect(Math.floor(x), Math.floor(y), Math.ceil(tileSize), Math.ceil(tileSize));
 }
 
 export function renderViewport(
@@ -23,12 +22,13 @@ export function renderViewport(
   viewportY: number,
   me: Player,
   subjects: Player[],
-  fogged: boolean
+  fogged: boolean,
+  viewportSize: number = VIEWPORT_SIZE
 ) {
   CTX.clearRect(0, 0, CANVAS.width, CANVAS.height);
 
-  const TILE_SIZE = getTileSize();
-  const half = Math.floor(VIEWPORT_SIZE / 2);
+  const TILE_SIZE = getTileSize(viewportSize);
+  const half = Math.floor(viewportSize / 2);
   const visible = fogged ? getVisibleTiles(maze, me.x, me.y, 2) : null;
 
   function isWallAdjacent(mx: number, my: number) {
@@ -43,8 +43,8 @@ export function renderViewport(
   }
 
   // Draw visible tiles (skip black out-of-view tiles for now)
-  for (let vy = 0; vy < VIEWPORT_SIZE; vy++) {
-    for (let vx = 0; vx < VIEWPORT_SIZE; vx++) {
+  for (let vy = 0; vy < viewportSize; vy++) {
+    for (let vx = 0; vx < viewportSize; vx++) {
       const mx = Math.floor(viewportX) + vx - half;
       const my = Math.floor(viewportY) + vy - half;
       const px = CANVAS.width / 2 + (mx - viewportX) * TILE_SIZE;
@@ -53,7 +53,7 @@ export function renderViewport(
 
       if (!tile) {
         if (!fogged) {
-          drawTile(px, py, "#111");
+          drawTile(px, py, "#111", TILE_SIZE);
         }
         continue;
       }
@@ -68,7 +68,7 @@ export function renderViewport(
         }
         color = "#aaa";
       }
-      drawTile(px, py, color);
+      drawTile(px, py, color, TILE_SIZE);
     }
   }
 
@@ -89,8 +89,8 @@ export function renderViewport(
 
   // Draw per-tile fog for distant tiles
   if (fogged && visible) {
-    for (let vy = 0; vy < VIEWPORT_SIZE; vy++) {
-      for (let vx = 0; vx < VIEWPORT_SIZE; vx++) {
+    for (let vy = 0; vy < viewportSize; vy++) {
+      for (let vx = 0; vx < viewportSize; vx++) {
         const mx = Math.floor(viewportX) + vx - half;
         const my = Math.floor(viewportY) + vy - half;
         const px = CANVAS.width / 2 + (mx - viewportX) * TILE_SIZE;
@@ -148,8 +148,8 @@ export function renderViewport(
 
   // Draw black tiles on top of non-visible areas (covering subjects)
   if (fogged && visible) {
-    for (let vy = 0; vy < VIEWPORT_SIZE; vy++) {
-      for (let vx = 0; vx < VIEWPORT_SIZE; vx++) {
+    for (let vy = 0; vy < viewportSize; vy++) {
+      for (let vx = 0; vx < viewportSize; vx++) {
         const mx = Math.floor(viewportX) + vx - half;
         const my = Math.floor(viewportY) + vy - half;
         const px = CANVAS.width / 2 + (mx - viewportX) * TILE_SIZE;
@@ -158,7 +158,7 @@ export function renderViewport(
 
         // Draw black tiles for out-of-view areas
         if (!tile || (tile !== "#" && !visible.has(`${mx},${my}`))) {
-          drawTile(px, py, "#111");
+          drawTile(px, py, "#111", TILE_SIZE);
         }
       }
     }

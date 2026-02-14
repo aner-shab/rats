@@ -14,6 +14,7 @@ const availableMazes: Maze[] = mazesData.mazes;
 
 export class GameState {
     private players: Map<string, Player & { socket: WebSocket }> = new Map();
+    private controllers: Map<string, WebSocket> = new Map();
     private usedSpawnPoints: Set<string> = new Set();
     private maze: Maze;
 
@@ -41,6 +42,14 @@ export class GameState {
             }
         }
         return null;
+    }
+
+    addController(controllerId: string, socket: WebSocket): void {
+        this.controllers.set(controllerId, socket);
+    }
+
+    removeController(controllerId: string): void {
+        this.controllers.delete(controllerId);
     }
 
     addPlayer(playerId: string, socket: WebSocket): Player | null {
@@ -118,19 +127,33 @@ export class GameState {
 
     broadcastToAll(message: any): void {
         const payload = JSON.stringify(message);
+        // Send to all players
         this.players.forEach((player) => {
             if (player.socket.readyState === 1) {
                 // OPEN
                 player.socket.send(payload);
             }
         });
+        // Send to all controllers
+        this.controllers.forEach((socket) => {
+            if (socket.readyState === 1) {
+                socket.send(payload);
+            }
+        });
     }
 
     broadcastToOthers(excludeId: string, message: any): void {
         const payload = JSON.stringify(message);
+        // Send to other players
         this.players.forEach((player) => {
             if (player.id !== excludeId && player.socket.readyState === 1) {
                 player.socket.send(payload);
+            }
+        });
+        // Send to all controllers
+        this.controllers.forEach((socket) => {
+            if (socket.readyState === 1) {
+                socket.send(payload);
             }
         });
     }
