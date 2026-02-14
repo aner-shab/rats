@@ -111,39 +111,89 @@ export function renderViewport(
     }
   }
 
-  // Draw all subjects (including other players)
+  // Group subjects by position
+  const positionGroups = new Map<string, Player[]>();
   subjects.forEach((subject) => {
-    const subjectPx = CANVAS.width / 2 + (subject.renderX - viewportX) * TILE_SIZE;
-    const subjectPy = CANVAS.height / 2 + (subject.renderY - viewportY) * TILE_SIZE;
+    const key = `${Math.floor(subject.renderX)},${Math.floor(subject.renderY)}`;
+    if (!positionGroups.has(key)) {
+      positionGroups.set(key, []);
+    }
+    positionGroups.get(key)!.push(subject);
+  });
 
-    // Calculate distance-based fade for other players
-    let alpha = 1.0;
-    if (fogged && visible) {
-      const isMe = subject === me || subject.id === me.id;
-      if (!isMe) {
-        const dx = subject.renderX - me.x;
-        const dy = subject.renderY - me.y;
-        const distance = Math.sqrt(dx * dx + dy * dy);
+  // Draw all subjects (including other players)
+  positionGroups.forEach((playersAtPos) => {
+    const count = playersAtPos.length;
+    const playerSize = TILE_SIZE / 2;
 
-        // Fade starts at distance 1.5, fully faded at 2.5
-        const fadeStart = 1.5;
-        const fadeEnd = 2.5;
+    playersAtPos.forEach((subject, index) => {
+      const subjectPx = CANVAS.width / 2 + (subject.renderX - viewportX) * TILE_SIZE;
+      const subjectPy = CANVAS.height / 2 + (subject.renderY - viewportY) * TILE_SIZE;
 
-        if (distance > fadeStart) {
-          alpha = Math.max(0, 1 - (distance - fadeStart) / (fadeEnd - fadeStart));
+      // Calculate distance-based fade for other players
+      let alpha = 1.0;
+      if (fogged && visible) {
+        const isMe = subject === me || subject.id === me.id;
+        if (!isMe) {
+          const dx = subject.renderX - me.x;
+          const dy = subject.renderY - me.y;
+          const distance = Math.sqrt(dx * dx + dy * dy);
+
+          // Fade starts at distance 1.5, fully faded at 2.5
+          const fadeStart = 1.5;
+          const fadeEnd = 2.5;
+
+          if (distance > fadeStart) {
+            alpha = Math.max(0, 1 - (distance - fadeStart) / (fadeEnd - fadeStart));
+          }
         }
       }
-    }
 
-    // Draw self as blue, others as red
-    const isMe = subject === me || subject.id === me.id;
-    const baseColor = isMe ? "blue" : "red";
+      // Draw self as blue, others as red
+      const isMe = subject === me || subject.id === me.id;
+      const baseColor = isMe ? "blue" : "red";
 
-    // Apply alpha for fade effect
-    CTX.globalAlpha = alpha;
-    CTX.fillStyle = baseColor;
-    CTX.fillRect(subjectPx + TILE_SIZE / 4, subjectPy + TILE_SIZE / 4, TILE_SIZE / 2, TILE_SIZE / 2);
-    CTX.globalAlpha = 1.0; // Reset alpha
+      // Calculate position based on number of players
+      let offsetX: number, offsetY: number;
+
+      if (count === 1) {
+        // Single player: centered
+        offsetX = TILE_SIZE / 4;
+        offsetY = TILE_SIZE / 4;
+      } else if (count === 2) {
+        // Two players: diagonal positioning
+        if (index === 0) {
+          // Top-left corner
+          offsetX = 0;
+          offsetY = 0;
+        } else {
+          // Bottom-right corner
+          offsetX = TILE_SIZE / 2;
+          offsetY = TILE_SIZE / 2;
+        }
+      } else {
+        // Multiple players: grid layout
+        const cols = Math.ceil(Math.sqrt(count));
+        const rows = Math.ceil(count / cols);
+        const cellWidth = TILE_SIZE / cols;
+        const cellHeight = TILE_SIZE / rows;
+        const col = index % cols;
+        const row = Math.floor(index / cols);
+        offsetX = col * cellWidth + (cellWidth - playerSize) / 2;
+        offsetY = row * cellHeight + (cellHeight - playerSize) / 2;
+      }
+
+      // Apply alpha for fade effect
+      CTX.globalAlpha = alpha;
+      CTX.fillStyle = baseColor;
+      CTX.fillRect(
+        subjectPx + offsetX,
+        subjectPy + offsetY,
+        playerSize,
+        playerSize
+      );
+      CTX.globalAlpha = 1.0; // Reset alpha
+    });
   });
 
   // Draw black tiles on top of non-visible areas (covering subjects)
