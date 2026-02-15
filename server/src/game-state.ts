@@ -20,6 +20,7 @@ export class GameState {
     private gameStarted: boolean = false;
     private controllerAssigned: boolean = false;
     private controllerPersistentId: string | null = null;
+    private controllerPlayerId: string | null = null;
 
     constructor() {
         const randomIndex = 0;
@@ -89,6 +90,8 @@ export class GameState {
         // Check if rejoining as controller
         if (persistentId === this.controllerPersistentId) {
             console.log(`Controller ${playerId} reconnecting`);
+
+            this.controllerPlayerId = playerId;
 
             const controller: Player & { socket: WebSocket; persistentId: string } = {
                 id: playerId,
@@ -174,8 +177,9 @@ export class GameState {
 
         this.lobbyPlayers.forEach((lobbyPlayer) => {
             if (lobbyPlayer.role === "controller") {
-                // Save controller's persistent ID for reconnection
+                // Save controller's persistent ID and player ID for reconnection
                 this.controllerPersistentId = lobbyPlayer.persistentId;
+                this.controllerPlayerId = lobbyPlayer.id;
 
                 // Controllers don't need spawn points but need to be tracked for broadcasts
                 const controller: Player & { socket: WebSocket; persistentId: string } = {
@@ -293,12 +297,14 @@ export class GameState {
     }
 
     getAllPlayers(): Player[] {
-        return Array.from(this.players.values()).map(({ socket, persistentId, ...player }) => player);
+        return Array.from(this.players.values())
+            .filter((p) => p.id !== this.controllerPlayerId)
+            .map(({ socket, persistentId, ...player }) => player);
     }
 
     getOtherPlayers(excludeId: string): Player[] {
         return Array.from(this.players.values())
-            .filter((p) => p.id !== excludeId)
+            .filter((p) => p.id !== excludeId && p.id !== this.controllerPlayerId)
             .map(({ socket, persistentId, ...player }) => player);
     }
 
