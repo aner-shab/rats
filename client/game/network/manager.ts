@@ -1,11 +1,14 @@
-import type { ClientMessage, ServerMessage, Player, Maze } from "../../../shared/protocol";
+import type { ClientMessage, ServerMessage, Player, Maze, LobbyPlayer } from "../../../shared/protocol";
 import { getPersistentPlayerId } from "./persistent-id";
 
 export class NetworkManager {
     private ws: WebSocket | null = null;
     private playerId: string | null = null;
     private persistentId: string;
-    private onJoinedCallback: ((playerId: string, x: number, y: number, players: Player[], maze: Maze) => void) | null = null;
+    private onLobbyJoinedCallback: ((playerId: string, role: "controller" | "subject", players: LobbyPlayer[]) => void) | null = null;
+    private onLobbyUpdatedCallback: ((players: LobbyPlayer[]) => void) | null = null;
+    private onGameStartingCallback: ((role: "controller" | "subject") => void) | null = null;
+    private onGameStartedCallback: ((playerId: string, x: number, y: number, players: Player[], maze: Maze, role: "controller" | "subject") => void) | null = null;
     private onSpawnFullCallback: (() => void) | null = null;
     private onPlayerJoinedCallback: ((player: Player) => void) | null = null;
     private onPlayerMovedCallback: ((playerId: string, x: number, y: number) => void) | null = null;
@@ -47,10 +50,29 @@ export class NetworkManager {
 
     private handleServerMessage(message: ServerMessage): void {
         switch (message.type) {
-            case "joined":
+            case "lobby-joined":
                 this.playerId = message.playerId;
-                if (this.onJoinedCallback) {
-                    this.onJoinedCallback(message.playerId, message.x, message.y, message.players, message.maze);
+                if (this.onLobbyJoinedCallback) {
+                    this.onLobbyJoinedCallback(message.playerId, message.role, message.players);
+                }
+                break;
+
+            case "lobby-updated":
+                if (this.onLobbyUpdatedCallback) {
+                    this.onLobbyUpdatedCallback(message.players);
+                }
+                break;
+
+            case "game-starting":
+                if (this.onGameStartingCallback) {
+                    this.onGameStartingCallback(message.role);
+                }
+                break;
+
+            case "game-started":
+                this.playerId = message.playerId;
+                if (this.onGameStartedCallback) {
+                    this.onGameStartedCallback(message.playerId, message.x, message.y, message.players, message.maze, message.role);
                 }
                 break;
 
@@ -86,20 +108,40 @@ export class NetworkManager {
         }
     }
 
-    joinAsSubject(): void {
-        this.sendMessage({ type: "join", role: "subject", persistentId: this.persistentId });
+    joinLobby(): void {
+        this.sendMessage({ type: "join-lobby", persistentId: this.persistentId });
     }
 
-    joinAsController(): void {
-        this.sendMessage({ type: "join", role: "controller", persistentId: this.persistentId });
+    setReady(isReady: boolean): void {
+        this.sendMessage({ type: "set-ready", isReady });
+    }
+
+    setName(name: string): void {
+        this.sendMessage({ type: "set-name", name });
+    }
+
+    setColor(color: string): void {
+        this.sendMessage({ type: "set-color", color });
     }
 
     sendMove(dx: number, dy: number): void {
         this.sendMessage({ type: "move", dx, dy });
     }
 
-    onJoined(callback: (playerId: string, x: number, y: number, players: Player[], maze: Maze) => void): void {
-        this.onJoinedCallback = callback;
+    onLobbyJoined(callback: (playerId: string, role: "controller" | "subject", players: LobbyPlayer[]) => void): void {
+        this.onLobbyJoinedCallback = callback;
+    }
+
+    onLobbyUpdated(callback: (players: LobbyPlayer[]) => void): void {
+        this.onLobbyUpdatedCallback = callback;
+    }
+
+    onGameStarting(callback: (role: "controller" | "subject") => void): void {
+        this.onGameStartingCallback = callback;
+    }
+
+    onGameStarted(callback: (playerId: string, x: number, y: number, players: Player[], maze: Maze, role: "controller" | "subject") => void): void {
+        this.onGameStartedCallback = callback;
     }
 
     onSpawnFull(callback: () => void): void {

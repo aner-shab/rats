@@ -18,10 +18,11 @@ fastify.register(async (fastify) => {
     fastify.get("/ws/:sessionId", { websocket: true }, (socket, req) => {
         const sessionId = (req.params as { sessionId: string }).sessionId;
         const gameState = sessionManager.getOrCreateSession(sessionId);
-        // Generate unique connection ID for this WebSocket
         const connectionId = randomBytes(8).toString("hex");
         let playerId: string | null = null;
         let playerRole: "subject" | "controller" | null = null;
+        let inLobby = true;
+
         console.log(`New connection ${connectionId} to session ${sessionId}`);
 
         socket.on("message", (data) => {
@@ -29,76 +30,158 @@ fastify.register(async (fastify) => {
                 const message: ClientMessage = JSON.parse(data.toString());
 
                 switch (message.type) {
-                    case "join": {
+                    case "join-lobby": {
+                        playerId = connectionId;
                         const persistentId = message.persistentId;
-                        playerRole = message.role;
-                        console.log(`Connection ${connectionId} joining session ${sessionId} as ${message.role} (persistentId: ${persistentId})`);
 
-                        const maze = gameState.getMaze();
-                        console.log(`Sending maze to ${message.role}: ${maze.name} (${maze.width}x${maze.height}, ${maze.tiles.length} tiles)`);
+                        // Check if player should reconnect to active game
+                        if (gameState.isGameStarted()) {
+                            const reconnectData = gameState.reconnectPlayer(playerId, persistentId, socket);
+                            if (reconnectData) {
+                                playerRole = reconnectData.role;
+                                inLobby = false;
 
-                        if (message.role === "controller") {
-                            // Controllers only need maze data and player list, they don't spawn as players
-                            playerId = connectionId;
-                            gameState.addController(playerId, socket);
-                            const joinedResponse: ServerMessage = {
-                                type: "joined",
-                                playerId: playerId,
-                                x: 0,
-                                y: 0,
-                                players: gameState.getAllPlayers(),
-                                maze: maze,
-                            };
-                            socket.send(JSON.stringify(joinedResponse));
-                            console.log(`Controller ${playerId} connected`);
+                                const { player, maze, role } = reconnectData;
+
+                                // Send game-started with current state
+                                const allPlayers = gameState.getOtherPlayers(playerId);
+                                const response: ServerMessage = {
+                                    type: "game-started",
+                                    playerId,
+                                    x: player.x,
+                                    y: player.y,
+                                    players: allPlayers,
+                                    maze,
+                                    role,
+                                };
+                                socket.send(JSON.stringify(response));
+
+                                // Notify other players (only for subjects)
+                                if (role === "subject") {
+                                    const joinMessage: ServerMessage = {
+                                        type: "player-joined",
+                                        player: {
+                                            id: playerId,
+                                            x: player.x,
+                                            y: player.y,
+                                            renderX: player.x,
+                                            renderY: player.y,
+                                        },
+                                    };
+                                    gameState.broadcastToOthers(playerId, joinMessage);
+                                }
+
+                                console.log(`Player ${playerId} reconnected to game as ${role}`);
+                                break;
+                            }
+                        }
+
+                        const lobbyResult = gameState.addLobbyPlayer(playerId, persistentId, socket);
+                        if (!lobbyResult) {
+                            // This shouldn't happen now, but handle gracefully
+                            console.error("Failed to add player to lobby");
                             break;
                         }
 
-                        // Subject joins as a player
-                        // Use connection ID as unique player ID, but check persistent ID for position restoration
-                        playerId = connectionId;
-                        const player = gameState.addPlayer(playerId, persistentId, socket);
+                        playerRole = lobbyResult.role;
 
-                        if (!player) {
-                            const response: ServerMessage = { type: "spawn-full" };
-                            socket.send(JSON.stringify(response));
-                            console.log(`No spawn points available for player ${playerId}`);
-                            return;
+                        // Send lobby joined confirmation
+                        const response: ServerMessage = {
+                            type: "lobby-joined",
+                            playerId,
+                            role: lobbyResult.role,
+                            players: lobbyResult.players,
+                        };
+                        socket.send(JSON.stringify(response));
+
+                        // Broadcast updated lobby to all players
+                        const updateMessage: ServerMessage = {
+                            type: "lobby-updated",
+                            players: lobbyResult.players,
+                        };
+                        gameState.broadcastToLobby(updateMessage);
+                        break;
+                    }
+
+                    case "set-ready": {
+                        if (!playerId || !inLobby) return;
+
+                        const players = gameState.setPlayerReady(playerId, message.isReady);
+
+                        // Broadcast updated lobby
+                        const updateMessage: ServerMessage = {
+                            type: "lobby-updated",
+                            players,
+                        };
+                        gameState.broadcastToLobby(updateMessage);
+
+                        // Check if all players are ready
+                        if (gameState.areAllPlayersReady()) {
+                            console.log(`All players ready in session ${sessionId}, starting game...`);
+
+                            // Notify all players game is starting
+                            players.forEach(p => {
+                                const startingMsg: ServerMessage = {
+                                    type: "game-starting",
+                                    role: p.role,
+                                };
+                                gameState.broadcastToLobby(startingMsg);
+                            });
+
+                            // Start the game
+                            const spawnedPlayers = gameState.startGame();
+                            inLobby = false;
+
+                            // Send game-started to each player with their spawn position
+                            spawnedPlayers.forEach((data, pid) => {
+                                const allPlayers = gameState.getAllPlayers();
+
+                                const gameStartedMsg: ServerMessage = {
+                                    type: "game-started",
+                                    playerId: pid,
+                                    x: data.x,
+                                    y: data.y,
+                                    players: allPlayers.filter(p => p.id !== pid),
+                                    maze: gameState.getMaze(),
+                                    role: data.role,
+                                };
+                                data.socket.send(JSON.stringify(gameStartedMsg));
+                            });
                         }
+                        break;
+                    }
 
-                        // Send joined confirmation with all current players
-                        const joinedResponse: ServerMessage = {
-                            type: "joined",
-                            playerId: player.id,
-                            x: player.x,
-                            y: player.y,
-                            players: gameState.getOtherPlayers(playerId),
-                            maze: maze,
+                    case "set-name": {
+                        if (!playerId || !inLobby) return;
+
+                        const players = gameState.setPlayerName(playerId, message.name);
+
+                        // Broadcast updated lobby
+                        const updateMessage: ServerMessage = {
+                            type: "lobby-updated",
+                            players,
                         };
-                        socket.send(JSON.stringify(joinedResponse));
+                        gameState.broadcastToLobby(updateMessage);
+                        break;
+                    }
 
-                        // Notify other players
-                        const playerJoinedMessage: ServerMessage = {
-                            type: "player-joined",
-                            player: {
-                                id: player.id,
-                                x: player.x,
-                                y: player.y,
-                                renderX: player.x,
-                                renderY: player.y,
-                            },
+                    case "set-color": {
+                        if (!playerId || !inLobby) return;
+
+                        const players = gameState.setPlayerColor(playerId, message.color);
+
+                        // Broadcast updated lobby
+                        const updateMessage: ServerMessage = {
+                            type: "lobby-updated",
+                            players,
                         };
-                        gameState.broadcastToOthers(playerId, playerJoinedMessage);
-
-                        console.log(
-                            `Player ${playerId} spawned at (${player.x}, ${player.y})`
-                        );
+                        gameState.broadcastToLobby(updateMessage);
                         break;
                     }
 
                     case "move": {
-                        if (!playerId) {
-                            console.warn("Received move from player who hasn't joined yet");
+                        if (!playerId || inLobby) {
+                            console.warn("Received move from player in lobby or not joined");
                             return;
                         }
 
@@ -107,7 +190,6 @@ fastify.register(async (fastify) => {
                         if (moved) {
                             const player = gameState.getPlayer(playerId);
                             if (player) {
-                                // Broadcast movement to all players (including sender for confirmation)
                                 const moveMessage: ServerMessage = {
                                     type: "player-moved",
                                     playerId: player.id,
@@ -127,22 +209,27 @@ fastify.register(async (fastify) => {
         });
 
         socket.on("close", () => {
-            if (!playerId) {
-                console.log("Connection closed before player joined");
-                return;
-            }
+            if (!playerId) return;
 
             console.log(`Player ${playerId} (${playerRole}) disconnected`);
 
-            // Only remove from the appropriate collection based on role
-            if (playerRole === "subject") {
-                gameState.removePlayer(playerId);
-            } else if (playerRole === "controller") {
-                gameState.removeController(socket);
-            }
-
-            // Only broadcast player-left if they were a subject (actual player)
-            if (playerRole === "subject") {
+            if (inLobby) {
+                gameState.removeLobbyPlayer(playerId);
+                const players = gameState.getLobbyPlayers();
+                const updateMessage: ServerMessage = {
+                    type: "lobby-updated",
+                    players,
+                };
+                gameState.broadcastToLobby(updateMessage);
+            } else {
+                // Player is in active game
+                if (playerRole === "subject") {
+                    // Save subject state for reconnection
+                    gameState.removePlayer(playerId);
+                } else if (playerRole === "controller") {
+                    // Just remove controller without saving state
+                    gameState.removePlayerWithoutSaving(playerId);
+                }
                 const playerLeftMessage: ServerMessage = {
                     type: "player-left",
                     playerId,

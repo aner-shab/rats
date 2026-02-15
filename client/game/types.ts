@@ -13,6 +13,7 @@ export interface Player {
   y: number;
   renderX: number;
   renderY: number;
+  color?: string;
 }
 
 export type Role = "controller" | "subject" | null;

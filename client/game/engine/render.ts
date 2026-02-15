@@ -149,9 +149,10 @@ export function renderViewport(
         }
       }
 
-      // Draw self as blue, others as red
+      // Use player's selected color, fallback to blue for current player, red for others
       const isMe = subject === me || subject.id === me.id;
-      const baseColor = isMe ? "blue" : "red";
+      const defaultColor = isMe ? "#1E88E5" : "#E53935";
+      const baseColor = subject.color || defaultColor;
 
       // Calculate position based on number of players
       let offsetX: number, offsetY: number;

@@ -3,7 +3,7 @@
 
 <head>
   <meta charset="UTF-8" />
-  <title>Controller / Subject MVP</title>
+  <title>Rats Maze Game</title>
   <style>
     html,
     body {
@@ -13,74 +13,267 @@
       height: 100%;
       overflow: hidden;
       background: #111;
+      font-family: 'Arial', sans-serif;
     }
 
     canvas {
       display: block;
     }
 
-    #role {
-      position: absolute;
-      top: 20px;
+    #lobby {
+      position: fixed;
+      top: 50%;
       left: 50%;
-      transform: translateX(-50%);
-      z-index: 1000;
-      display: flex;
-      gap: 10px;
-    }
-
-    #shareLink {
-      position: absolute;
-      top: 60px;
-      left: 50%;
-      transform: translateX(-50%);
-      z-index: 1000;
-      display: none;
-      background: rgba(0, 0, 0, 0.8);
-      padding: 10px;
-      border-radius: 5px;
+      transform: translate(-50%, -50%);
+      background: rgba(0, 0, 0, 0.9);
+      padding: 40px;
+      border-radius: 10px;
+      border: 2px solid #555;
       color: white;
-      font-family: monospace;
-      font-size: 12px;
+      min-width: 400px;
+      display: none;
+      z-index: 1000;
     }
 
-    #shareLink.show {
+    #lobby.show {
       display: block;
     }
 
-    button {
-      padding: 10px 20px;
-      font-size: 14px;
-      cursor: pointer;
-      background: #333;
+    #lobby h2 {
+      margin-top: 0;
+      color: #4CAF50;
+    }
+
+    #lobby input[type="text"] {
+      width: 100%;
+      padding: 8px;
+      background: #222;
       color: white;
-      border: 1px solid #555;
+      border: 2px solid #555;
       border-radius: 4px;
+      font-size: 14px;
+      transition: border-color 0.2s;
     }
 
-    button:hover {
-      background: #444;
+    #lobby input[type="text"]:focus {
+      outline: none;
+      border-color: #4CAF50;
     }
 
-    #copyBtn {
-      margin-left: 5px;
-      padding: 5px 10px;
+    #lobby input[type="text"]::placeholder {
+      color: #666;
+    }
+
+    #lobby .session-link {
+      background: #222;
+      padding: 10px;
+      border-radius: 5px;
+      margin: 20px 0;
+      word-break: break-all;
+      font-family: monospace;
       font-size: 12px;
+      cursor: pointer;
+      border: 2px solid #555;
+      transition: all 0.2s;
+    }
+
+    #lobby .session-link:hover {
+      background: #333;
+      border-color: #777;
+    }
+
+    #lobby .session-link.copied {
+      border-color: #4CAF50;
+      background: #1a3a1a;
+    }
+
+    #lobby .session-link.copied {
+      border-color: #4CAF50;
+      background: #1a3a1a;
+    }
+
+    #lobby .players-list {
+      margin: 20px 0;
+    }
+
+    #lobby .player-item {
+      padding: 10px;
+      margin: 5px 0;
+      background: #222;
+      border-radius: 5px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+
+    #lobby .player-role {
+      display: inline-block;
+      padding: 3px 8px;
+      border-radius: 3px;
+      font-size: 11px;
+      font-weight: bold;
+      margin-left: 10px;
+    }
+
+    #lobby .role-controller {
+      background: #2196F3;
+      color: white;
+    }
+
+    #lobby .role-subject {
+      background: #FF5722;
+      color: white;
+    }
+
+    #lobby .player-ready {
+      color: #4CAF50;
+      font-weight: bold;
+    }
+
+    #lobby .player-not-ready {
+      color: #999;
+    }
+
+    #lobby .ready-button {
+      width: 100%;
+      padding: 15px;
+      font-size: 16px;
+      background: #4CAF50;
+      color: white;
+      border: none;
+      border-radius: 4px;
+      cursor: pointer;
+      font-weight: bold;
+    }
+
+    #lobby .ready-button:hover {
+      background: #45a049;
+    }
+
+    #lobby .ready-button.is-ready {
+      background: #f44336;
+    }
+
+    #lobby .ready-button.is-ready:hover {
+      background: #da190b;
+    }
+
+    #lobby .color-picker {
+      margin: 20px 0;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+    }
+
+    #lobby .color-picker label {
+      display: block;
+      margin-bottom: 10px;
+      font-size: 14px;
+    }
+
+    #lobby .color-selector {
+      display: flex;
+      align-items: center;
+      gap: 15px;
+    }
+
+    #lobby .color-arrow {
+      width: 40px;
+      height: 40px;
+      background: #333;
+      border: 2px solid #555;
+      border-radius: 5px;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 20px;
+      color: white;
+      transition: all 0.2s;
+      user-select: none;
+    }
+
+    #lobby .color-arrow:hover {
+      background: #444;
+      border-color: #777;
+    }
+
+    #lobby .color-arrow:active {
+      transform: scale(0.95);
+    }
+
+    #lobby .color-preview {
+      width: 60px;
+      height: 60px;
+      border: 3px solid #555;
+      border-radius: 5px;
+      background: #aaa;
+      position: relative;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    #lobby .color-preview-tile {
+      width: 30px;
+      height: 30px;
+      border-radius: 2px;
+    }
+
+    #lobby .color-name {
+      margin-top: 5px;
+      font-size: 14px;
+      color: #999;
+      text-align: center;
+    }
+
+    #game-container {
+      display: none;
+    }
+
+    #game-container.show {
+      display: block;
     }
   </style>
 </head>
 
 <body>
-  <div id="role">
-    <button id="controllerBtn">Controller</button>
-    <button id="subjectBtn">Subject</button>
-    <button id="shareLinkBtn">Share Link</button>
+  <div id="lobby">
+    <h2>Game Lobby</h2>
+
+    <div style="margin-bottom: 20px;">
+      <label for="playerName" style="display: block; margin-bottom: 5px; font-size: 14px;">Your Name:</label>
+      <input type="text" id="playerName" placeholder="Enter your name" maxlength="20" />
+    </div>
+
+    <div class="color-picker">
+      <label>Your Color:</label>
+      <div class="color-selector">
+        <button class="color-arrow" id="colorPrev">◀</button>
+        <div class="color-preview">
+          <div class="color-preview-tile" id="colorPreviewTile"></div>
+        </div>
+        <button class="color-arrow" id="colorNext">▶</button>
+      </div>
+    </div>
+
+    <p>Click to copy the session link:</p>
+    <div class="session-link" id="sessionLink"></div>
+
+    <div class="players-list">
+      <h3>Players (<span id="playerCount">0</span>)</h3>
+      <div id="playersList"></div>
+    </div>
+
+    <button class="ready-button" id="readyBtn">Ready</button>
+    <p id="waitingMessage" style="text-align: center; color: #999; margin-top: 15px;">
+      Waiting for all players to be ready...
+    </p>
   </div>
-  <div id="shareLink">
-    <span id="linkText"></span>
-    <button id="copyBtn">Copy</button>
+
+  <div id="game-container">
+    <canvas id="game"></canvas>
   </div>
-  <canvas id="game"></canvas>
 
   <script type="module" src="/main.ts"></script>
 </body>

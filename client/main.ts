@@ -1,10 +1,10 @@
-import { spawnSubject } from "./game/entities/player";
 import { setupInput } from "./game/engine/input";
 import { renderViewport, resizeCanvas } from "./game/engine/render";
-import { CANVAS, VIEWPORT_SIZE, CONTROLLER_VIEWPORT_SIZE, CAMERA_SPEED } from "./game/constants";
+import { CANVAS, VIEWPORT_SIZE, CONTROLLER_VIEWPORT_SIZE, CAMERA_SPEED, PLAYER_COLORS } from "./game/constants";
 import { Maze, Player, Role } from "./game/types";
 import { NetworkManager } from "./game/network/manager";
 import { generateMnemonicId } from "../shared/id-generator";
+import type { LobbyPlayer } from "../shared/protocol";
 
 let maze: Maze | null = null;
 let me: Player | null = null;
@@ -15,22 +15,19 @@ let viewportX = 0;
 let viewportY = 0;
 let controllerViewport: Player = { x: 0, y: 0, renderX: 0, renderY: 0 };
 let networkManager: NetworkManager | null = null;
+let isReady = false;
+let inLobby = true;
 
-// Use refs so input always sees latest values
 const roleRef: { current: Role } = { current: role };
 const meRef: { current: Player | null } = { current: me };
 const mazeRef: { current: Maze | null } = { current: null };
 
 function getOrCreateSessionId(): string {
-  // Try to get session ID from URL query parameters
   const params = new URLSearchParams(window.location.search);
   let sessionId = params.get('s');
 
   if (!sessionId) {
-    // Generate human-readable mnemonic ID
     sessionId = generateMnemonicId();
-
-    // Update URL with new session ID
     params.set('s', sessionId);
     const newUrl = `${window.location.pathname}?${params.toString()}`;
     window.history.replaceState({}, '', newUrl);
@@ -39,62 +36,203 @@ function getOrCreateSessionId(): string {
   return sessionId;
 }
 
+function updateLobbyUI(players: LobbyPlayer[], myPlayerId: string | null) {
+  const playersList = document.getElementById("playersList")!;
+  const playerCount = document.getElementById("playerCount")!;
+
+  playerCount.textContent = players.length.toString();
+
+  playersList.innerHTML = players.map(p => {
+    const roleClass = p.role === "controller" ? "role-controller" : "role-subject";
+    const roleName = p.role === "controller" ? "Controller" : "Subject";
+    const readyClass = p.isReady ? "player-ready" : "player-not-ready";
+    const readyText = p.isReady ? "✓ Ready" : "Not Ready";
+    const isMe = p.id === myPlayerId ? " (You)" : "";
+    const displayName = p.name || `Player ${p.id.substring(0, 8)}`;
+
+    return `
+      <div class="player-item">
+        <div>
+          ${displayName}${isMe}
+          <span class="player-role ${roleClass}">${roleName}</span>
+        </div>
+        <div class="${readyClass}">${readyText}</div>
+      </div>
+    `;
+  }).join('');
+}
+
+function showLobby() {
+  document.getElementById("lobby")!.classList.add("show");
+  document.getElementById("game-container")!.classList.remove("show");
+}
+
+function showGame() {
+  document.getElementById("lobby")!.classList.remove("show");
+  document.getElementById("game-container")!.classList.add("show");
+}
+
 async function init() {
-  // Get or create session ID from URL
   const sessionId = getOrCreateSessionId();
   console.log(`Session ID: ${sessionId}`);
 
-  // Initialize network manager
+  // Display session link
+  const sessionUrl = window.location.href;
+  const sessionLinkEl = document.getElementById("sessionLink")!;
+  sessionLinkEl.textContent = sessionUrl;
+
+  // Copy link on click
+  sessionLinkEl.onclick = async () => {
+    try {
+      await navigator.clipboard.writeText(sessionUrl);
+      sessionLinkEl.classList.add("copied");
+      const originalText = sessionLinkEl.textContent;
+      sessionLinkEl.textContent = "Copied!";
+      setTimeout(() => {
+        sessionLinkEl.textContent = originalText;
+        sessionLinkEl.classList.remove("copied");
+      }, 2000);
+    } catch (err) {
+      console.error("Failed to copy:", err);
+    }
+  };
+
+  // Ready button
+  const readyBtn = document.getElementById("readyBtn")! as HTMLButtonElement;
+  readyBtn.onclick = () => {
+    isReady = !isReady;
+    readyBtn.textContent = isReady ? "Not Ready" : "Ready";
+    readyBtn.classList.toggle("is-ready", isReady);
+    networkManager?.setReady(isReady);
+  };
+
+  // Player name input
+  const playerNameInput = document.getElementById("playerName")! as HTMLInputElement;
+
+  // Load saved name from localStorage
+  const savedName = localStorage.getItem("playerName");
+  if (savedName) {
+    playerNameInput.value = savedName;
+  }
+
+  let nameTimeout: number | null = null;
+  playerNameInput.oninput = () => {
+    if (nameTimeout) {
+      clearTimeout(nameTimeout);
+    }
+    nameTimeout = window.setTimeout(() => {
+      const name = playerNameInput.value.trim();
+      // Save to localStorage
+      if (name) {
+        localStorage.setItem("playerName", name);
+      } else {
+        localStorage.removeItem("playerName");
+      }
+      networkManager?.setName(name);
+    }, 500);
+  };
+
+  // Color picker
+  let currentColorIndex = 0;
+  const savedColor = localStorage.getItem("playerColor");
+  if (savedColor) {
+    const colorIndex = PLAYER_COLORS.findIndex(c => c.value === savedColor);
+    if (colorIndex !== -1) {
+      currentColorIndex = colorIndex;
+    }
+  }
+
+  const colorPreviewTile = document.getElementById("colorPreviewTile")!;
+  const colorPrevBtn = document.getElementById("colorPrev")!;
+  const colorNextBtn = document.getElementById("colorNext")!;
+
+  function updateColorPreview() {
+    const color = PLAYER_COLORS[currentColorIndex];
+    colorPreviewTile.style.backgroundColor = color.value;
+    localStorage.setItem("playerColor", color.value);
+    networkManager?.setColor(color.value);
+  }
+
+  colorPrevBtn.onclick = () => {
+    currentColorIndex = (currentColorIndex - 1 + PLAYER_COLORS.length) % PLAYER_COLORS.length;
+    updateColorPreview();
+  };
+
+  colorNextBtn.onclick = () => {
+    currentColorIndex = (currentColorIndex + 1) % PLAYER_COLORS.length;
+    updateColorPreview();
+  };
+
+  // Initialize color preview
+  updateColorPreview();
+
   networkManager = new NetworkManager();
 
   try {
     await networkManager.connect("ws://localhost:3001/ws", sessionId);
     console.log("Connected to multiplayer server");
 
-    // Setup network event handlers
-    networkManager.onJoined((playerId, x, y, players, receivedMaze) => {
-      console.log(`Joined as ${playerId} at (${x}, ${y})`);
-      console.log("Received maze data:", receivedMaze);
-      console.log("Maze dimensions:", receivedMaze?.width, "x", receivedMaze?.height);
-      console.log("Maze tiles count:", receivedMaze?.tiles?.length);
+    // Join lobby immediately
+    networkManager.joinLobby();
+    showLobby();
 
-      // Receive maze from server
+    networkManager.onLobbyJoined((playerId, assignedRole, players) => {
+      console.log(`Joined lobby as ${assignedRole}`);
+      role = assignedRole;
+      roleRef.current = assignedRole;
+      updateLobbyUI(players, playerId);
+
+      // Send saved name to server if available
+      if (savedName) {
+        networkManager?.setName(savedName);
+      }
+    });
+
+    networkManager.onLobbyUpdated((players) => {
+      updateLobbyUI(players, networkManager?.getPlayerId() || null);
+    });
+
+    networkManager.onGameStarting((assignedRole) => {
+      console.log("Game is starting...");
+      document.getElementById("waitingMessage")!.textContent = "Game starting...";
+    });
+
+    networkManager.onGameStarted((playerId, x, y, players, receivedMaze, assignedRole) => {
+      console.log(`Game started! Role: ${assignedRole}`);
+      inLobby = false;
       maze = receivedMaze;
       mazeRef.current = receivedMaze;
-      console.log(`Received maze: ${receivedMaze.width}x${receivedMaze.height}`);
+      role = assignedRole;
+      roleRef.current = assignedRole;
 
-      // Determine role based on whether we have a valid spawn position
-      if (x === 0 && y === 0) {
-        // Controller joined (no spawn position)
-        role = "controller";
-        roleRef.current = role;
+      if (assignedRole === "controller") {
         controllerViewport.x = Math.floor(maze.width / 2);
         controllerViewport.y = Math.floor(maze.height / 2);
         controllerViewport.renderX = controllerViewport.x;
         controllerViewport.renderY = controllerViewport.y;
 
-        // Add all existing players to subjects list for controller view
         players.forEach((player) => {
           remotePlayers.set(player.id!, player);
           subjects.push(player);
         });
-        console.log(`Joined as controller, watching ${players.length} players`);
+        console.log(`Controller watching ${players.length} players`);
       } else {
-        // Subject joined (has spawn position)
-        role = "subject";
-        roleRef.current = role;
-
-        me = { id: playerId, x, y, renderX: x, renderY: y };
+        const savedColor = localStorage.getItem("playerColor");
+        me = { id: playerId, x, y, renderX: x, renderY: y, color: savedColor || undefined };
         meRef.current = me;
         subjects.push(me);
 
-        // Add existing players
         players.forEach((player) => {
           remotePlayers.set(player.id!, player);
           subjects.push(player);
         });
-        console.log("Joined as subject");
+        console.log("Started as subject");
       }
+
+      showGame();
+      setupInput(roleRef, meRef, controllerViewport, mazeRef, networkManager);
+      window.addEventListener("resize", resizeCanvas);
+      resizeCanvas();
     });
 
     networkManager.onSpawnFull(() => {
@@ -103,27 +241,18 @@ async function init() {
 
     networkManager.onPlayerJoined((player) => {
       console.log(`Player ${player.id} joined at (${player.x}, ${player.y})`);
-
-      // Always update remotePlayers with the new player object
       remotePlayers.set(player.id!, player);
-
-      // Find if player already exists in subjects
       const existingIndex = subjects.findIndex(s => s.id === player.id);
-
       if (existingIndex >= 0) {
-        // Replace with the new player object reference
         subjects[existingIndex] = player;
       } else {
-        // Add new player
         subjects.push(player);
       }
     });
 
     networkManager.onPlayerMoved((playerId, x, y) => {
-      // Find and update the player in remotePlayers
       const player = remotePlayers.get(playerId);
       if (player) {
-        // Smooth movement animation
         const startX = player.renderX;
         const startY = player.renderY;
         player.x = x;
@@ -141,13 +270,11 @@ async function init() {
 
         requestAnimationFrame(animate);
 
-        // Also ensure the player in subjects array is the same reference
         const subjectIndex = subjects.findIndex(s => s.id === playerId);
         if (subjectIndex >= 0 && subjects[subjectIndex] !== player) {
           subjects[subjectIndex] = player;
         }
       } else if (me && me.id === playerId) {
-        // Update own position (server confirmation)
         const startX = me.renderX;
         const startY = me.renderY;
         me.x = x;
@@ -169,96 +296,24 @@ async function init() {
 
     networkManager.onPlayerLeft((playerId) => {
       console.log(`Player ${playerId} left`);
-      // Always remove from subjects (what controller sees)
       subjects = subjects.filter((s) => s.id !== playerId);
-      // Remove from remote players map
       remotePlayers.delete(playerId);
     });
   } catch (error) {
     console.error("Failed to connect to server:", error);
-    alert("Failed to connect to multiplayer server. Running in offline mode.");
-    networkManager = null;
+    alert("Failed to connect to multiplayer server.");
   }
-
-  document.getElementById("controllerBtn")!.onclick = () => {
-    if (networkManager) {
-      // Join multiplayer as controller - maze will be received after joining
-      console.log("Joining as controller...");
-      networkManager.joinAsController();
-      // Role will be set when maze data is received in onJoined callback
-    } else {
-      // Fallback to local mode
-      if (!maze) {
-        alert("No maze available in offline mode");
-        return;
-      }
-      role = "controller";
-      roleRef.current = role;
-      controllerViewport.x = Math.floor(maze.width / 2);
-      controllerViewport.y = Math.floor(maze.height / 2);
-      controllerViewport.renderX = controllerViewport.x;
-      controllerViewport.renderY = controllerViewport.y;
-    }
-  };
-
-  document.getElementById("subjectBtn")!.onclick = () => {
-    if (networkManager) {
-      // Join multiplayer - maze will be received after joining
-      console.log("Joining as subject...");
-      networkManager.joinAsSubject();
-    } else {
-      // Fallback to local mode
-      if (!maze) {
-        alert("No maze available in offline mode");
-        return;
-      }
-      role = "subject";
-      roleRef.current = role;
-      me = spawnSubject(maze, subjects);
-      meRef.current = me;
-    }
-  };
-
-  // Share link button handler
-  const shareLinkDiv = document.getElementById("shareLink")!;
-  const linkText = document.getElementById("linkText")!;
-  const shareLinkBtn = document.getElementById("shareLinkBtn")!;
-  const copyBtn = document.getElementById("copyBtn")!;
-
-  shareLinkBtn.onclick = () => {
-    const currentUrl = window.location.href;
-    linkText.textContent = currentUrl;
-    shareLinkDiv.classList.toggle("show");
-  };
-
-  copyBtn.onclick = async () => {
-    const currentUrl = window.location.href;
-    try {
-      await navigator.clipboard.writeText(currentUrl);
-      copyBtn.textContent = "Copied!";
-      setTimeout(() => {
-        copyBtn.textContent = "Copy";
-      }, 2000);
-    } catch (err) {
-      console.error("Failed to copy:", err);
-    }
-  };
-
-  setupInput(roleRef, meRef, controllerViewport, mazeRef, networkManager);
-  window.addEventListener("resize", resizeCanvas);
-  resizeCanvas();
 
   requestAnimationFrame(loop);
 }
 
 function loop() {
+  if (inLobby) {
+    requestAnimationFrame(loop);
+    return;
+  }
+
   if (!role || !maze) {
-    const CTX = CANVAS.getContext("2d")!;
-    CTX.fillStyle = "#222";
-    CTX.fillRect(0, 0, CANVAS.width, CANVAS.height);
-    CTX.fillStyle = "white";
-    const message = !role ? "Choose a role to begin" : "Waiting for maze data...";
-    CTX.fillText(message, 180, 280);
     requestAnimationFrame(loop);
     return;
   }
