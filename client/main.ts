@@ -328,7 +328,8 @@ function loop() {
   if (role === "controller") {
     viewportX += (controllerViewport.renderX - viewportX) * CAMERA_SPEED;
     viewportY += (controllerViewport.renderY - viewportY) * CAMERA_SPEED;
-    renderViewport(maze, viewportX, viewportY, controllerViewport, subjects, false, CONTROLLER_VIEWPORT_SIZE);
+    // Match the subject's viewport size for consistent perspective
+    renderViewport(maze, viewportX, viewportY, controllerViewport, subjects, false, VIEWPORT_SIZE);
   }
 
   if (role === "subject" && me) {

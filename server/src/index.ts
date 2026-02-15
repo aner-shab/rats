@@ -66,6 +66,7 @@ fastify.register(async (fastify) => {
                                             y: player.y,
                                             renderX: player.x,
                                             renderY: player.y,
+                                            color: player.color,
                                         },
                                     };
                                     gameState.broadcastToOthers(playerId, joinMessage);
@@ -73,6 +74,11 @@ fastify.register(async (fastify) => {
 
                                 console.log(`Player ${playerId} reconnected to game as ${role}`);
                                 break;
+                            } else {
+                                // Reconnection failed during active game
+                                console.error(`Failed to reconnect player with persistentId ${persistentId}`);
+                                socket.close();
+                                return;
                             }
                         }
 
@@ -213,7 +219,9 @@ fastify.register(async (fastify) => {
 
             console.log(`Player ${playerId} (${playerRole}) disconnected`);
 
-            if (inLobby) {
+            // Check if game has started rather than relying on local inLobby variable
+            if (!gameState.isGameStarted()) {
+                // Player is in lobby
                 gameState.removeLobbyPlayer(playerId);
                 const players = gameState.getLobbyPlayers();
                 const updateMessage: ServerMessage = {
@@ -222,14 +230,8 @@ fastify.register(async (fastify) => {
                 };
                 gameState.broadcastToLobby(updateMessage);
             } else {
-                // Player is in active game
-                if (playerRole === "subject") {
-                    // Save subject state for reconnection
-                    gameState.removePlayer(playerId);
-                } else if (playerRole === "controller") {
-                    // Just remove controller without saving state
-                    gameState.removePlayerWithoutSaving(playerId);
-                }
+                // Player is in active game - save state for reconnection
+                gameState.removePlayer(playerId);
                 const playerLeftMessage: ServerMessage = {
                     type: "player-left",
                     playerId,

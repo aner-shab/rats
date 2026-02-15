@@ -11,6 +11,12 @@ export function getTileSize(viewportSize: number = VIEWPORT_SIZE) {
   return Math.floor(Math.min(CANVAS.width, CANVAS.height) / viewportSize);
 }
 
+export function getTileSizeForRect(viewportWidth: number, viewportHeight: number) {
+  const tileSizeX = Math.floor(CANVAS.width / viewportWidth);
+  const tileSizeY = Math.floor(CANVAS.height / viewportHeight);
+  return Math.min(tileSizeX, tileSizeY);
+}
+
 export function drawTile(x: number, y: number, color: string, tileSize: number) {
   CTX.fillStyle = color;
   CTX.fillRect(Math.floor(x), Math.floor(y), Math.ceil(tileSize), Math.ceil(tileSize));
@@ -23,12 +29,26 @@ export function renderViewport(
   me: Player,
   subjects: Player[],
   fogged: boolean,
-  viewportSize: number = VIEWPORT_SIZE
+  viewportSize: number = VIEWPORT_SIZE,
+  viewportWidth?: number,
+  viewportHeight?: number
 ) {
   CTX.clearRect(0, 0, CANVAS.width, CANVAS.height);
 
-  const TILE_SIZE = getTileSize(viewportSize);
-  const half = Math.floor(viewportSize / 2);
+  const vWidth = viewportWidth ?? viewportSize;
+  const vHeight = viewportHeight ?? viewportSize;
+  const TILE_SIZE = viewportWidth && viewportHeight ? getTileSizeForRect(vWidth, vHeight) : getTileSize(viewportSize);
+
+  // Calculate actual tiles that fit on screen (for unlimited viewport)
+  const tilesOnScreenX = Math.ceil(CANVAS.width / TILE_SIZE) + 2; // +2 for buffer
+  const tilesOnScreenY = Math.ceil(CANVAS.height / TILE_SIZE) + 2;
+
+  // Use viewport size for fogged view, screen size for unfogged (controller)
+  const renderWidth = fogged ? vWidth : tilesOnScreenX;
+  const renderHeight = fogged ? vHeight : tilesOnScreenY;
+
+  const halfWidth = Math.floor(renderWidth / 2);
+  const halfHeight = Math.floor(renderHeight / 2);
   const visible = fogged ? getVisibleTiles(maze, me.x, me.y, 2) : null;
 
   function isWallAdjacent(mx: number, my: number) {
@@ -43,10 +63,10 @@ export function renderViewport(
   }
 
   // Draw visible tiles (skip black out-of-view tiles for now)
-  for (let vy = 0; vy < viewportSize; vy++) {
-    for (let vx = 0; vx < viewportSize; vx++) {
-      const mx = Math.floor(viewportX) + vx - half;
-      const my = Math.floor(viewportY) + vy - half;
+  for (let vy = 0; vy < renderHeight; vy++) {
+    for (let vx = 0; vx < renderWidth; vx++) {
+      const mx = Math.floor(viewportX) + vx - halfWidth;
+      const my = Math.floor(viewportY) + vy - halfHeight;
       const px = CANVAS.width / 2 + (mx - viewportX) * TILE_SIZE;
       const py = CANVAS.height / 2 + (my - viewportY) * TILE_SIZE;
       const tile = maze.tiles[my]?.[mx];
@@ -60,7 +80,8 @@ export function renderViewport(
 
       let color: string;
       if (tile === "#") {
-        color = fogged && isWallAdjacent(mx, my) ? "#504630" : "#111";
+        // Always use brown walls for consistent visual style
+        color = "#504630";
       } else {
         if (visible && !visible.has(`${mx},${my}`)) {
           // Skip black tiles for now, draw them after subjects
@@ -89,10 +110,10 @@ export function renderViewport(
 
   // Draw per-tile fog for distant tiles
   if (fogged && visible) {
-    for (let vy = 0; vy < viewportSize; vy++) {
-      for (let vx = 0; vx < viewportSize; vx++) {
-        const mx = Math.floor(viewportX) + vx - half;
-        const my = Math.floor(viewportY) + vy - half;
+    for (let vy = 0; vy < renderHeight; vy++) {
+      for (let vx = 0; vx < renderWidth; vx++) {
+        const mx = Math.floor(viewportX) + vx - halfWidth;
+        const my = Math.floor(viewportY) + vy - halfHeight;
         const px = CANVAS.width / 2 + (mx - viewportX) * TILE_SIZE;
         const py = CANVAS.height / 2 + (my - viewportY) * TILE_SIZE;
 
@@ -199,10 +220,10 @@ export function renderViewport(
 
   // Draw black tiles on top of non-visible areas (covering subjects)
   if (fogged && visible) {
-    for (let vy = 0; vy < viewportSize; vy++) {
-      for (let vx = 0; vx < viewportSize; vx++) {
-        const mx = Math.floor(viewportX) + vx - half;
-        const my = Math.floor(viewportY) + vy - half;
+    for (let vy = 0; vy < renderHeight; vy++) {
+      for (let vx = 0; vx < renderWidth; vx++) {
+        const mx = Math.floor(viewportX) + vx - halfWidth;
+        const my = Math.floor(viewportY) + vy - halfHeight;
         const px = CANVAS.width / 2 + (mx - viewportX) * TILE_SIZE;
         const py = CANVAS.height / 2 + (my - viewportY) * TILE_SIZE;
         const tile = maze.tiles[my]?.[mx];

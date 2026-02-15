@@ -93,7 +93,14 @@ export class GameState {
 
             this.controllerPlayerId = playerId;
 
-            const controller: Player & { socket: WebSocket; persistentId: string } = {
+            // Restore controller's previous state (including color) if available
+            const disconnectedState = this.disconnectedPlayers.get(persistentId);
+            const controller: Player & { socket: WebSocket; persistentId: string } = disconnectedState ? {
+                ...disconnectedState,
+                id: playerId,
+                socket,
+                persistentId,
+            } : {
                 id: playerId,
                 x: 0,
                 y: 0,
@@ -104,6 +111,9 @@ export class GameState {
             };
 
             this.players.set(playerId, controller);
+            if (disconnectedState) {
+                this.disconnectedPlayers.delete(persistentId);
+            }
 
             return {
                 player: controller,
