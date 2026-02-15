@@ -13,7 +13,7 @@ const mazesData = JSON.parse(readFileSync(mazesPath, "utf-8"));
 const availableMazes: Maze[] = mazesData.mazes;
 
 export class GameState {
-    private players: Map<string, Player & { socket: WebSocket }> = new Map();
+    private players: Map<string, Player & { socket: WebSocket; persistentId: string }> = new Map();
     private controllers: Set<WebSocket> = new Set();
     private usedSpawnPoints: Set<string> = new Set();
     private maze: Maze;
@@ -53,39 +53,50 @@ export class GameState {
         this.controllers.delete(socket);
     }
 
-    addPlayer(playerId: string, socket: WebSocket): Player | null {
-        // Check if player is already connected (shouldn't happen, but handle it)
+    addPlayer(playerId: string, persistentId: string, socket: WebSocket): Player | null {
+        // Check if player is already connected with this exact ID (shouldn't happen)
         const existingPlayer = this.players.get(playerId);
         if (existingPlayer) {
-            console.warn(`Player ${playerId} is already connected, updating socket`);
-            existingPlayer.socket = socket;
-            return existingPlayer;
+            console.warn(`Player ${playerId} is already connected, this should not happen`);
+            return null;
         }
 
-        // Check if player was previously disconnected and restore their position
-        const disconnectedPlayer = this.disconnectedPlayers.get(playerId);
+        // Check if there's a disconnected player with the persistent ID that we can restore
+        // BUT only if no other active player is using that persistent ID
+        const disconnectedPlayer = this.disconnectedPlayers.get(persistentId);
         if (disconnectedPlayer) {
-            console.log(`Restoring player ${playerId} at (${disconnectedPlayer.x}, ${disconnectedPlayer.y})`);
-            const player: Player & { socket: WebSocket } = {
-                ...disconnectedPlayer,
-                socket,
-            };
-            this.players.set(playerId, player);
-            this.disconnectedPlayers.delete(playerId);
-            return player;
+            // Check if there's already an active player with this persistent ID
+            const hasActivePlayerWithPersistentId = Array.from(this.players.values())
+                .some(p => p.id === persistentId);
+
+            if (!hasActivePlayerWithPersistentId) {
+                console.log(`Restoring player ${playerId} at (${disconnectedPlayer.x}, ${disconnectedPlayer.y}) from persistent ID ${persistentId}`);
+                const player: Player & { socket: WebSocket; persistentId: string } = {
+                    ...disconnectedPlayer,
+                    id: playerId, // Use the new unique connection ID
+                    socket,
+                    persistentId,
+                };
+                this.players.set(playerId, player);
+                this.disconnectedPlayers.delete(persistentId);
+                return player;
+            } else {
+                console.log(`Persistent ID ${persistentId} is already in use, creating new player for ${playerId}`);
+            }
         }
 
         // New player - find a spawn point
         const spawn = this.findAvailableSpawnPoint();
         if (!spawn) return null;
 
-        const player: Player & { socket: WebSocket } = {
+        const player: Player & { socket: WebSocket; persistentId: string } = {
             id: playerId,
             x: spawn.x,
             y: spawn.y,
             renderX: spawn.x,
             renderY: spawn.y,
             socket,
+            persistentId,
         };
 
         this.players.set(playerId, player);
@@ -95,10 +106,10 @@ export class GameState {
     removePlayer(playerId: string): void {
         const player = this.players.get(playerId);
         if (player) {
-            // Save player state for potential reconnection
-            const { socket, ...playerState } = player;
-            this.disconnectedPlayers.set(playerId, playerState);
-            console.log(`Saved state for disconnected player ${playerId} at (${playerState.x}, ${playerState.y})`);
+            // Save player state using persistent ID for potential reconnection
+            const { socket, persistentId, ...playerState } = player;
+            this.disconnectedPlayers.set(persistentId, playerState);
+            console.log(`Saved state for disconnected player ${playerId} (persistentId: ${persistentId}) at (${playerState.x}, ${playerState.y})`);
 
             this.players.delete(playerId);
         }
@@ -138,13 +149,13 @@ export class GameState {
     }
 
     getAllPlayers(): Player[] {
-        return Array.from(this.players.values()).map(({ socket, ...player }) => player);
+        return Array.from(this.players.values()).map(({ socket, persistentId, ...player }) => player);
     }
 
     getOtherPlayers(excludeId: string): Player[] {
         return Array.from(this.players.values())
             .filter((p) => p.id !== excludeId)
-            .map(({ socket, ...player }) => player);
+            .map(({ socket, persistentId, ...player }) => player);
     }
 
     broadcastToAll(message: any): void {

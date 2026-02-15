@@ -2,6 +2,7 @@ import Fastify from "fastify";
 import websocket from "@fastify/websocket";
 import { SessionManager } from "./session-manager.js";
 import type { ClientMessage, ServerMessage } from "../../shared/protocol";
+import { randomBytes } from "crypto";
 
 const fastify = Fastify({
     logger: true,
@@ -17,9 +18,11 @@ fastify.register(async (fastify) => {
     fastify.get("/ws/:sessionId", { websocket: true }, (socket, req) => {
         const sessionId = (req.params as { sessionId: string }).sessionId;
         const gameState = sessionManager.getOrCreateSession(sessionId);
+        // Generate unique connection ID for this WebSocket
+        const connectionId = randomBytes(8).toString("hex");
         let playerId: string | null = null;
         let playerRole: "subject" | "controller" | null = null;
-        console.log(`New connection to session ${sessionId}`);
+        console.log(`New connection ${connectionId} to session ${sessionId}`);
 
         socket.on("message", (data) => {
             try {
@@ -27,16 +30,16 @@ fastify.register(async (fastify) => {
 
                 switch (message.type) {
                     case "join": {
-                        // Use the persistent ID from the client
-                        playerId = message.persistentId;
+                        const persistentId = message.persistentId;
                         playerRole = message.role;
-                        console.log(`Player ${playerId} joined session ${sessionId} as ${message.role}`);
+                        console.log(`Connection ${connectionId} joining session ${sessionId} as ${message.role} (persistentId: ${persistentId})`);
 
                         const maze = gameState.getMaze();
                         console.log(`Sending maze to ${message.role}: ${maze.name} (${maze.width}x${maze.height}, ${maze.tiles.length} tiles)`);
 
                         if (message.role === "controller") {
                             // Controllers only need maze data and player list, they don't spawn as players
+                            playerId = connectionId;
                             gameState.addController(playerId, socket);
                             const joinedResponse: ServerMessage = {
                                 type: "joined",
@@ -52,7 +55,9 @@ fastify.register(async (fastify) => {
                         }
 
                         // Subject joins as a player
-                        const player = gameState.addPlayer(playerId, socket);
+                        // Use connection ID as unique player ID, but check persistent ID for position restoration
+                        playerId = connectionId;
+                        const player = gameState.addPlayer(playerId, persistentId, socket);
 
                         if (!player) {
                             const response: ServerMessage = { type: "spawn-full" };
