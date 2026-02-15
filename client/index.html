@@ -96,6 +96,12 @@
       margin: 20px 0;
     }
 
+    #lobby #playersList {
+      max-height: 280px;
+      overflow-y: auto;
+      min-height: 280px;
+    }
+
     #lobby .player-item {
       padding: 10px;
       margin: 5px 0;
@@ -104,6 +110,16 @@
       display: flex;
       justify-content: space-between;
       align-items: center;
+    }
+
+    #lobby .player-color-indicator {
+      display: inline-block;
+      width: 16px;
+      height: 16px;
+      border-radius: 2px;
+      margin-right: 8px;
+      vertical-align: middle;
+      border: 1px solid #555;
     }
 
     #lobby .player-role {

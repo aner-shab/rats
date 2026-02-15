@@ -49,11 +49,12 @@ function updateLobbyUI(players: LobbyPlayer[], myPlayerId: string | null) {
     const readyText = p.isReady ? "✓ Ready" : "Not Ready";
     const isMe = p.id === myPlayerId ? " (You)" : "";
     const displayName = p.name || `Player ${p.id.substring(0, 8)}`;
+    const colorIndicator = p.color ? `<span class="player-color-indicator" style="background-color: ${p.color}"></span>` : '';
 
     return `
       <div class="player-item">
         <div>
-          ${displayName}${isMe}
+          ${colorIndicator}${displayName}${isMe}
           <span class="player-role ${roleClass}">${roleName}</span>
         </div>
         <div class="${readyClass}">${readyText}</div>
@@ -185,6 +186,12 @@ async function init() {
       // Send saved name to server if available
       if (savedName) {
         networkManager?.setName(savedName);
+      }
+
+      // Send saved color to server
+      const savedColor = localStorage.getItem("playerColor");
+      if (savedColor) {
+        networkManager?.setColor(savedColor);
       }
     });
 
