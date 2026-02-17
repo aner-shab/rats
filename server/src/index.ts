@@ -186,7 +186,7 @@ fastify.register(async (fastify) => {
                     }
 
                     case "move": {
-                        if (!playerId || inLobby) {
+                        if (!playerId || !gameState.isGameStarted()) {
                             console.warn("Received move from player in lobby or not joined");
                             return;
                         }
