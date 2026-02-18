@@ -79,7 +79,10 @@ export function renderViewport(
       }
 
       let color: string;
-      if (tile === "#") {
+      // Check if this is the exit tile
+      if (maze.exit && mx === maze.exit.x && my === maze.exit.y) {
+        color = "#00ff88"; // Bright cyan-green for the exit
+      } else if (tile === "#") {
         // Always use brown walls for consistent visual style
         color = "#504630";
       } else {

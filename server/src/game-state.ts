@@ -11,6 +11,42 @@ const mazesPath = join(__dirname, "../mazes.json");
 const mazesData = JSON.parse(readFileSync(mazesPath, "utf-8"));
 const availableMazes: Maze[] = mazesData.mazes;
 
+function generateRandomExit(maze: Maze): { x: number; y: number } {
+    const outerWalls: { x: number; y: number }[] = [];
+
+    // Top edge (y = 0)
+    for (let x = 0; x < maze.width; x++) {
+        if (maze.tiles[0]?.[x] === "#") {
+            outerWalls.push({ x, y: 0 });
+        }
+    }
+
+    // Bottom edge (y = height - 1)
+    for (let x = 0; x < maze.width; x++) {
+        if (maze.tiles[maze.height - 1]?.[x] === "#") {
+            outerWalls.push({ x, y: maze.height - 1 });
+        }
+    }
+
+    // Left edge (x = 0)
+    for (let y = 1; y < maze.height - 1; y++) {
+        if (maze.tiles[y]?.[0] === "#") {
+            outerWalls.push({ x: 0, y });
+        }
+    }
+
+    // Right edge (x = width - 1)
+    for (let y = 1; y < maze.height - 1; y++) {
+        if (maze.tiles[y]?.[maze.width - 1] === "#") {
+            outerWalls.push({ x: maze.width - 1, y });
+        }
+    }
+
+    // Pick a random wall from the outer edge
+    const randomIndex = Math.floor(Math.random() * outerWalls.length);
+    return outerWalls[randomIndex];
+}
+
 export class GameState {
     private players: Map<string, Player & { socket: WebSocket; persistentId: string }> = new Map();
     private lobbyPlayers: Map<string, LobbyPlayer & { socket: WebSocket }> = new Map();
@@ -25,7 +61,8 @@ export class GameState {
     constructor() {
         const randomIndex = 0;
         this.maze = availableMazes[randomIndex];
-        console.log(`Selected maze: ${this.maze.name}`);
+        this.maze.exit = generateRandomExit(this.maze);
+        console.log(`Selected maze: ${this.maze.name} with exit at (${this.maze.exit.x}, ${this.maze.exit.y})`);
     }
 
     isGameStarted(): boolean {

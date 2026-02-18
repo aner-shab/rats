@@ -5,6 +5,7 @@ export interface Maze {
   height: number;
   name?: string;
   tiles: string[];
+  exit?: { x: number; y: number };
 }
 
 export interface Player {
