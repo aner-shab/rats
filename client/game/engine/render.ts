@@ -2,6 +2,35 @@ import { CANVAS, CTX, VIEWPORT_SIZE, CAMERA_SPEED, DEBUG } from "../constants";
 import { Player, Maze } from "../types";
 import { getVisibleTiles } from "../entities/maze";
 
+// Brick texture asset
+let brickPattern: CanvasPattern | null = null;
+let brickImage: HTMLImageElement | null = null;
+let brickImageLoaded = false;
+
+// Load the brick wall texture asset
+function loadBrickTexture(): Promise<HTMLImageElement> {
+  return new Promise((resolve, reject) => {
+    if (brickImage && brickImageLoaded) {
+      resolve(brickImage);
+      return;
+    }
+    
+    const img = new Image();
+    img.onload = () => {
+      brickImage = img;
+      brickImageLoaded = true;
+      resolve(img);
+    };
+    img.onerror = reject;
+    img.src = '/assets/brick-wall.svg';
+  });
+}
+
+// Initialize brick texture on module load
+loadBrickTexture().catch(err => {
+  console.error('Failed to load brick texture:', err);
+});
+
 export function resizeCanvas() {
   CANVAS.width = window.innerWidth;
   CANVAS.height = window.innerHeight;
@@ -20,6 +49,36 @@ export function getTileSizeForRect(viewportWidth: number, viewportHeight: number
 export function drawTile(x: number, y: number, color: string, tileSize: number) {
   CTX.fillStyle = color;
   CTX.fillRect(Math.floor(x), Math.floor(y), Math.ceil(tileSize), Math.ceil(tileSize));
+}
+
+export function drawBrickTile(x: number, y: number, tileSize: number, mazeX: number, mazeY: number) {
+  if (brickImageLoaded && brickImage) {
+    // Create pattern if not already created
+    if (!brickPattern) {
+      brickPattern = CTX.createPattern(brickImage, 'repeat');
+    }
+    
+    if (brickPattern) {
+      // Save context state
+      CTX.save();
+      
+      // Translate so the pattern aligns with the tile's maze position
+      // This makes the texture move with the tile, not the camera
+      const offsetX = (mazeX * tileSize) % brickImage.width;
+      const offsetY = (mazeY * tileSize) % brickImage.height;
+      
+      CTX.translate(x - offsetX, y - offsetY);
+      CTX.fillStyle = brickPattern;
+      CTX.fillRect(offsetX, offsetY, Math.ceil(tileSize), Math.ceil(tileSize));
+      
+      // Restore context state
+      CTX.restore();
+    }
+  } else {
+    // Fallback to solid color if texture hasn't loaded yet
+    CTX.fillStyle = "#504630";
+    CTX.fillRect(Math.floor(x), Math.floor(y), Math.ceil(tileSize), Math.ceil(tileSize));
+  }
 }
 
 export function renderViewport(
@@ -83,8 +142,9 @@ export function renderViewport(
       if (maze.exit && mx === maze.exit.x && my === maze.exit.y) {
         color = "#00ff88"; // Bright cyan-green for the exit
       } else if (tile === "#") {
-        // Always use brown walls for consistent visual style
-        color = "#504630";
+        // Draw brick texture for walls
+        drawBrickTile(px, py, TILE_SIZE, mx, my);
+        continue;
       } else {
         if (visible && !visible.has(`${mx},${my}`)) {
           // Skip black tiles for now, draw them after subjects
