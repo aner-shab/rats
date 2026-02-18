@@ -7,6 +7,11 @@ let brickPattern: CanvasPattern | null = null;
 let brickImage: HTMLImageElement | null = null;
 let brickImageLoaded = false;
 
+// Gravel path texture asset
+let gravelPattern: CanvasPattern | null = null;
+let gravelImage: HTMLImageElement | null = null;
+let gravelImageLoaded = false;
+
 // Load the brick wall texture asset
 function loadBrickTexture(): Promise<HTMLImageElement> {
   return new Promise((resolve, reject) => {
@@ -26,9 +31,31 @@ function loadBrickTexture(): Promise<HTMLImageElement> {
   });
 }
 
-// Initialize brick texture on module load
+// Load the gravel path texture asset
+function loadGravelTexture(): Promise<HTMLImageElement> {
+  return new Promise((resolve, reject) => {
+    if (gravelImage && gravelImageLoaded) {
+      resolve(gravelImage);
+      return;
+    }
+
+    const img = new Image();
+    img.onload = () => {
+      gravelImage = img;
+      gravelImageLoaded = true;
+      resolve(img);
+    };
+    img.onerror = reject;
+    img.src = '/assets/gravel-path.svg';
+  });
+}
+
+// Initialize textures on module load
 loadBrickTexture().catch(err => {
   console.error('Failed to load brick texture:', err);
+});
+loadGravelTexture().catch(err => {
+  console.error('Failed to load gravel texture:', err);
 });
 
 export function resizeCanvas() {
@@ -144,85 +171,187 @@ export function drawBrickTile(x: number, y: number, tileSize: number, mazeX: num
       // Restore context state
       CTX.restore();
 
-      // Fill the cut corners with path color or black based on visibility
+      // Fill the cut corners with path texture or black based on visibility
       // Corner is black only if the adjacent tiles are not visible
       const seamFix = 1.0; // Generous overlap to prevent black seams
 
       if (cutTopLeft) {
-        let cornerColor = "#aaa";
+        let useTexture = true;
         if (visibleTiles) {
           const topVisible = visibleTiles.has(`${mazeX},${mazeY - 1}`);
           const leftVisible = visibleTiles.has(`${mazeX - 1},${mazeY}`);
           if (!topVisible || !leftVisible) {
-            cornerColor = "#111"; // Black if adjacent tiles not visible
+            useTexture = false; // Black if adjacent tiles not visible
           }
         }
-        CTX.fillStyle = cornerColor;
-        CTX.beginPath();
-        CTX.moveTo(x - seamFix, y - seamFix);
-        CTX.lineTo(x + cutSize + seamFix, y - seamFix);
-        CTX.lineTo(x - seamFix, y + cutSize + seamFix);
-        CTX.closePath();
-        CTX.fill();
+
+        if (useTexture && gravelImageLoaded && gravelImage && gravelPattern) {
+          CTX.save();
+          CTX.beginPath();
+          CTX.moveTo(x - seamFix, y - seamFix);
+          CTX.lineTo(x + cutSize + seamFix, y - seamFix);
+          CTX.lineTo(x - seamFix, y + cutSize + seamFix);
+          CTX.closePath();
+          CTX.clip();
+
+          const offsetX = (mazeX * tileSize) % gravelImage.width;
+          const offsetY = (mazeY * tileSize) % gravelImage.height;
+          CTX.translate(x - offsetX, y - offsetY);
+          CTX.fillStyle = gravelPattern;
+          CTX.fillRect(offsetX, offsetY, cutSize + seamFix, cutSize + seamFix);
+          CTX.restore();
+        } else {
+          CTX.fillStyle = useTexture ? "#aaa" : "#111";
+          CTX.beginPath();
+          CTX.moveTo(x - seamFix, y - seamFix);
+          CTX.lineTo(x + cutSize + seamFix, y - seamFix);
+          CTX.lineTo(x - seamFix, y + cutSize + seamFix);
+          CTX.closePath();
+          CTX.fill();
+        }
       }
 
       if (cutTopRight) {
-        let cornerColor = "#aaa";
+        let useTexture = true;
         if (visibleTiles) {
           const topVisible = visibleTiles.has(`${mazeX},${mazeY - 1}`);
           const rightVisible = visibleTiles.has(`${mazeX + 1},${mazeY}`);
           if (!topVisible || !rightVisible) {
-            cornerColor = "#111";
+            useTexture = false;
           }
         }
-        CTX.fillStyle = cornerColor;
-        CTX.beginPath();
-        CTX.moveTo(x + tileSize + seamFix, y - seamFix);
-        CTX.lineTo(x + tileSize - cutSize - seamFix, y - seamFix);
-        CTX.lineTo(x + tileSize + seamFix, y + cutSize + seamFix);
-        CTX.closePath();
-        CTX.fill();
+
+        if (useTexture && gravelImageLoaded && gravelImage && gravelPattern) {
+          CTX.save();
+          CTX.beginPath();
+          CTX.moveTo(x + tileSize + seamFix, y - seamFix);
+          CTX.lineTo(x + tileSize - cutSize - seamFix, y - seamFix);
+          CTX.lineTo(x + tileSize + seamFix, y + cutSize + seamFix);
+          CTX.closePath();
+          CTX.clip();
+
+          const offsetX = (mazeX * tileSize) % gravelImage.width;
+          const offsetY = (mazeY * tileSize) % gravelImage.height;
+          CTX.translate(x - offsetX, y - offsetY);
+          CTX.fillStyle = gravelPattern;
+          CTX.fillRect(offsetX + tileSize - cutSize, offsetY, cutSize + seamFix * 2, cutSize + seamFix);
+          CTX.restore();
+        } else {
+          CTX.fillStyle = useTexture ? "#aaa" : "#111";
+          CTX.beginPath();
+          CTX.moveTo(x + tileSize + seamFix, y - seamFix);
+          CTX.lineTo(x + tileSize - cutSize - seamFix, y - seamFix);
+          CTX.lineTo(x + tileSize + seamFix, y + cutSize + seamFix);
+          CTX.closePath();
+          CTX.fill();
+        }
       }
 
       if (cutBottomRight) {
-        let cornerColor = "#aaa";
+        let useTexture = true;
         if (visibleTiles) {
           const bottomVisible = visibleTiles.has(`${mazeX},${mazeY + 1}`);
           const rightVisible = visibleTiles.has(`${mazeX + 1},${mazeY}`);
           if (!bottomVisible || !rightVisible) {
-            cornerColor = "#111";
+            useTexture = false;
           }
         }
-        CTX.fillStyle = cornerColor;
-        CTX.beginPath();
-        CTX.moveTo(x + tileSize + seamFix, y + tileSize + seamFix);
-        CTX.lineTo(x + tileSize - cutSize - seamFix, y + tileSize + seamFix);
-        CTX.lineTo(x + tileSize + seamFix, y + tileSize - cutSize - seamFix);
-        CTX.closePath();
-        CTX.fill();
+
+        if (useTexture && gravelImageLoaded && gravelImage && gravelPattern) {
+          CTX.save();
+          CTX.beginPath();
+          CTX.moveTo(x + tileSize + seamFix, y + tileSize + seamFix);
+          CTX.lineTo(x + tileSize - cutSize - seamFix, y + tileSize + seamFix);
+          CTX.lineTo(x + tileSize + seamFix, y + tileSize - cutSize - seamFix);
+          CTX.closePath();
+          CTX.clip();
+
+          const offsetX = (mazeX * tileSize) % gravelImage.width;
+          const offsetY = (mazeY * tileSize) % gravelImage.height;
+          CTX.translate(x - offsetX, y - offsetY);
+          CTX.fillStyle = gravelPattern;
+          CTX.fillRect(offsetX + tileSize - cutSize, offsetY + tileSize - cutSize, cutSize + seamFix * 2, cutSize + seamFix * 2);
+          CTX.restore();
+        } else {
+          CTX.fillStyle = useTexture ? "#aaa" : "#111";
+          CTX.beginPath();
+          CTX.moveTo(x + tileSize + seamFix, y + tileSize + seamFix);
+          CTX.lineTo(x + tileSize - cutSize - seamFix, y + tileSize + seamFix);
+          CTX.lineTo(x + tileSize + seamFix, y + tileSize - cutSize - seamFix);
+          CTX.closePath();
+          CTX.fill();
+        }
       }
 
       if (cutBottomLeft) {
-        let cornerColor = "#aaa";
+        let useTexture = true;
         if (visibleTiles) {
           const bottomVisible = visibleTiles.has(`${mazeX},${mazeY + 1}`);
           const leftVisible = visibleTiles.has(`${mazeX - 1},${mazeY}`);
           if (!bottomVisible || !leftVisible) {
-            cornerColor = "#111";
+            useTexture = false;
           }
         }
-        CTX.fillStyle = cornerColor;
-        CTX.beginPath();
-        CTX.moveTo(x - seamFix, y + tileSize + seamFix);
-        CTX.lineTo(x + cutSize + seamFix, y + tileSize + seamFix);
-        CTX.lineTo(x - seamFix, y + tileSize - cutSize - seamFix);
-        CTX.closePath();
-        CTX.fill();
+
+        if (useTexture && gravelImageLoaded && gravelImage && gravelPattern) {
+          CTX.save();
+          CTX.beginPath();
+          CTX.moveTo(x - seamFix, y + tileSize + seamFix);
+          CTX.lineTo(x + cutSize + seamFix, y + tileSize + seamFix);
+          CTX.lineTo(x - seamFix, y + tileSize - cutSize - seamFix);
+          CTX.closePath();
+          CTX.clip();
+
+          const offsetX = (mazeX * tileSize) % gravelImage.width;
+          const offsetY = (mazeY * tileSize) % gravelImage.height;
+          CTX.translate(x - offsetX, y - offsetY);
+          CTX.fillStyle = gravelPattern;
+          CTX.fillRect(offsetX, offsetY + tileSize - cutSize, cutSize + seamFix, cutSize + seamFix * 2);
+          CTX.restore();
+        } else {
+          CTX.fillStyle = useTexture ? "#aaa" : "#111";
+          CTX.beginPath();
+          CTX.moveTo(x - seamFix, y + tileSize + seamFix);
+          CTX.lineTo(x + cutSize + seamFix, y + tileSize + seamFix);
+          CTX.lineTo(x - seamFix, y + tileSize - cutSize - seamFix);
+          CTX.closePath();
+          CTX.fill();
+        }
       }
     }
   } else {
     // Fallback to solid color if texture hasn't loaded yet
     CTX.fillStyle = "#504630";
+    CTX.fillRect(Math.floor(x), Math.floor(y), Math.ceil(tileSize), Math.ceil(tileSize));
+  }
+}
+
+export function drawPathTile(x: number, y: number, tileSize: number, mazeX: number, mazeY: number) {
+  if (gravelImageLoaded && gravelImage) {
+    // Create pattern if not already created
+    if (!gravelPattern) {
+      gravelPattern = CTX.createPattern(gravelImage, 'repeat');
+    }
+
+    if (gravelPattern) {
+      // Save context state
+      CTX.save();
+
+      // Translate so the pattern aligns with the tile's maze position
+      // This makes the texture move with the tile, not the camera
+      const offsetX = (mazeX * tileSize) % gravelImage.width;
+      const offsetY = (mazeY * tileSize) % gravelImage.height;
+
+      CTX.translate(x - offsetX, y - offsetY);
+      CTX.fillStyle = gravelPattern;
+      CTX.fillRect(offsetX, offsetY, Math.ceil(tileSize), Math.ceil(tileSize));
+
+      // Restore context state
+      CTX.restore();
+    }
+  } else {
+    // Fallback to solid color if texture hasn't loaded yet
+    CTX.fillStyle = "#aaa";
     CTX.fillRect(Math.floor(x), Math.floor(y), Math.ceil(tileSize), Math.ceil(tileSize));
   }
 }
@@ -283,22 +412,20 @@ export function renderViewport(
         continue;
       }
 
-      let color: string;
       // Check if this is the exit tile
       if (maze.exit && mx === maze.exit.x && my === maze.exit.y) {
-        color = "#00ff88"; // Bright cyan-green for the exit
+        drawTile(px, py, "#00ff88", TILE_SIZE); // Bright cyan-green for the exit
       } else if (tile === "#") {
         // Draw brick texture for walls
         drawBrickTile(px, py, TILE_SIZE, mx, my, maze, visible);
-        continue;
       } else {
         if (visible && !visible.has(`${mx},${my}`)) {
           // Skip black tiles for now, draw them after subjects
           continue;
         }
-        color = "#aaa";
+        // Draw gravel texture for paths
+        drawPathTile(px, py, TILE_SIZE, mx, my);
       }
-      drawTile(px, py, color, TILE_SIZE);
     }
   }
 
