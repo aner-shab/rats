@@ -14,7 +14,7 @@ function loadBrickTexture(): Promise<HTMLImageElement> {
       resolve(brickImage);
       return;
     }
-    
+
     const img = new Image();
     img.onload = () => {
       brickImage = img;
@@ -57,20 +57,20 @@ export function drawBrickTile(x: number, y: number, tileSize: number, mazeX: num
     if (!brickPattern) {
       brickPattern = CTX.createPattern(brickImage, 'repeat');
     }
-    
+
     if (brickPattern) {
       // Save context state
       CTX.save();
-      
+
       // Translate so the pattern aligns with the tile's maze position
       // This makes the texture move with the tile, not the camera
       const offsetX = (mazeX * tileSize) % brickImage.width;
       const offsetY = (mazeY * tileSize) % brickImage.height;
-      
+
       CTX.translate(x - offsetX, y - offsetY);
       CTX.fillStyle = brickPattern;
       CTX.fillRect(offsetX, offsetY, Math.ceil(tileSize), Math.ceil(tileSize));
-      
+
       // Restore context state
       CTX.restore();
     }
