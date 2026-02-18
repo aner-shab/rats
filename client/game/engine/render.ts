@@ -51,7 +51,13 @@ export function drawTile(x: number, y: number, color: string, tileSize: number) 
   CTX.fillRect(Math.floor(x), Math.floor(y), Math.ceil(tileSize), Math.ceil(tileSize));
 }
 
-export function drawBrickTile(x: number, y: number, tileSize: number, mazeX: number, mazeY: number) {
+// Simple hash function for position-based variation
+function positionHash(x: number, y: number): number {
+  const hash = Math.sin(x * 12.9898 + y * 78.233) * 43758.5453;
+  return hash - Math.floor(hash);
+}
+
+export function drawBrickTile(x: number, y: number, tileSize: number, mazeX: number, mazeY: number, maze: Maze, visibleTiles?: Set<string> | null) {
   if (brickImageLoaded && brickImage) {
     // Create pattern if not already created
     if (!brickPattern) {
@@ -61,6 +67,70 @@ export function drawBrickTile(x: number, y: number, tileSize: number, mazeX: num
     if (brickPattern) {
       // Save context state
       CTX.save();
+      
+      // Check adjacent tiles to determine which corners to cut
+      const hasPathAbove = maze.tiles[mazeY - 1]?.[mazeX] && maze.tiles[mazeY - 1][mazeX] !== "#";
+      const hasPathBelow = maze.tiles[mazeY + 1]?.[mazeX] && maze.tiles[mazeY + 1][mazeX] !== "#";
+      const hasPathLeft = maze.tiles[mazeY]?.[mazeX - 1] && maze.tiles[mazeY][mazeX - 1] !== "#";
+      const hasPathRight = maze.tiles[mazeY]?.[mazeX + 1] && maze.tiles[mazeY][mazeX + 1] !== "#";
+      
+      // Check diagonal tiles - don't cut corners if there's a wall diagonally
+      const hasWallTopLeft = maze.tiles[mazeY - 1]?.[mazeX - 1] === "#";
+      const hasWallTopRight = maze.tiles[mazeY - 1]?.[mazeX + 1] === "#";
+      const hasWallBottomRight = maze.tiles[mazeY + 1]?.[mazeX + 1] === "#";
+      const hasWallBottomLeft = maze.tiles[mazeY + 1]?.[mazeX - 1] === "#";
+      
+      // Randomly decide to cut each corner (only if BOTH adjacent sides have paths AND no diagonal wall)
+      const cutSize = tileSize * 0.2; // Size of the corner cut
+      const cutTopLeft = (hasPathAbove && hasPathLeft && !hasWallTopLeft) && positionHash(mazeX, mazeY) > 0.5;
+      const cutTopRight = (hasPathAbove && hasPathRight && !hasWallTopRight) && positionHash(mazeX + 1, mazeY) > 0.5;
+      const cutBottomRight = (hasPathBelow && hasPathRight && !hasWallBottomRight) && positionHash(mazeX + 1, mazeY + 1) > 0.5;
+      const cutBottomLeft = (hasPathBelow && hasPathLeft && !hasWallBottomLeft) && positionHash(mazeX, mazeY + 1) > 0.5;
+      
+      // Create path with angled corners
+      CTX.beginPath();
+      
+      // Start from top edge, accounting for top-left corner
+      if (cutTopLeft) {
+        CTX.moveTo(x + cutSize, y);
+      } else {
+        CTX.moveTo(x, y);
+      }
+      
+      // Top edge to top-right corner
+      if (cutTopRight) {
+        CTX.lineTo(x + tileSize - cutSize, y);
+        CTX.lineTo(x + tileSize, y + cutSize);
+      } else {
+        CTX.lineTo(x + tileSize, y);
+      }
+      
+      // Right edge to bottom-right corner
+      if (cutBottomRight) {
+        CTX.lineTo(x + tileSize, y + tileSize - cutSize);
+        CTX.lineTo(x + tileSize - cutSize, y + tileSize);
+      } else {
+        CTX.lineTo(x + tileSize, y + tileSize);
+      }
+      
+      // Bottom edge to bottom-left corner
+      if (cutBottomLeft) {
+        CTX.lineTo(x + cutSize, y + tileSize);
+        CTX.lineTo(x, y + tileSize - cutSize);
+      } else {
+        CTX.lineTo(x, y + tileSize);
+      }
+      
+      // Left edge to top-left corner
+      if (cutTopLeft) {
+        CTX.lineTo(x, y + cutSize);
+        CTX.lineTo(x + cutSize, y);
+      } else {
+        CTX.lineTo(x, y);
+      }
+      
+      CTX.closePath();
+      CTX.clip();
 
       // Translate so the pattern aligns with the tile's maze position
       // This makes the texture move with the tile, not the camera
@@ -73,6 +143,82 @@ export function drawBrickTile(x: number, y: number, tileSize: number, mazeX: num
 
       // Restore context state
       CTX.restore();
+      
+      // Fill the cut corners with path color or black based on visibility
+      // Corner is black only if the adjacent tiles are not visible
+      const seamFix = 1.0; // Generous overlap to prevent black seams
+      
+      if (cutTopLeft) {
+        let cornerColor = "#aaa";
+        if (visibleTiles) {
+          const topVisible = visibleTiles.has(`${mazeX},${mazeY - 1}`);
+          const leftVisible = visibleTiles.has(`${mazeX - 1},${mazeY}`);
+          if (!topVisible || !leftVisible) {
+            cornerColor = "#111"; // Black if adjacent tiles not visible
+          }
+        }
+        CTX.fillStyle = cornerColor;
+        CTX.beginPath();
+        CTX.moveTo(x - seamFix, y - seamFix);
+        CTX.lineTo(x + cutSize + seamFix, y - seamFix);
+        CTX.lineTo(x - seamFix, y + cutSize + seamFix);
+        CTX.closePath();
+        CTX.fill();
+      }
+      
+      if (cutTopRight) {
+        let cornerColor = "#aaa";
+        if (visibleTiles) {
+          const topVisible = visibleTiles.has(`${mazeX},${mazeY - 1}`);
+          const rightVisible = visibleTiles.has(`${mazeX + 1},${mazeY}`);
+          if (!topVisible || !rightVisible) {
+            cornerColor = "#111";
+          }
+        }
+        CTX.fillStyle = cornerColor;
+        CTX.beginPath();
+        CTX.moveTo(x + tileSize + seamFix, y - seamFix);
+        CTX.lineTo(x + tileSize - cutSize - seamFix, y - seamFix);
+        CTX.lineTo(x + tileSize + seamFix, y + cutSize + seamFix);
+        CTX.closePath();
+        CTX.fill();
+      }
+      
+      if (cutBottomRight) {
+        let cornerColor = "#aaa";
+        if (visibleTiles) {
+          const bottomVisible = visibleTiles.has(`${mazeX},${mazeY + 1}`);
+          const rightVisible = visibleTiles.has(`${mazeX + 1},${mazeY}`);
+          if (!bottomVisible || !rightVisible) {
+            cornerColor = "#111";
+          }
+        }
+        CTX.fillStyle = cornerColor;
+        CTX.beginPath();
+        CTX.moveTo(x + tileSize + seamFix, y + tileSize + seamFix);
+        CTX.lineTo(x + tileSize - cutSize - seamFix, y + tileSize + seamFix);
+        CTX.lineTo(x + tileSize + seamFix, y + tileSize - cutSize - seamFix);
+        CTX.closePath();
+        CTX.fill();
+      }
+      
+      if (cutBottomLeft) {
+        let cornerColor = "#aaa";
+        if (visibleTiles) {
+          const bottomVisible = visibleTiles.has(`${mazeX},${mazeY + 1}`);
+          const leftVisible = visibleTiles.has(`${mazeX - 1},${mazeY}`);
+          if (!bottomVisible || !leftVisible) {
+            cornerColor = "#111";
+          }
+        }
+        CTX.fillStyle = cornerColor;
+        CTX.beginPath();
+        CTX.moveTo(x - seamFix, y + tileSize + seamFix);
+        CTX.lineTo(x + cutSize + seamFix, y + tileSize + seamFix);
+        CTX.lineTo(x - seamFix, y + tileSize - cutSize - seamFix);
+        CTX.closePath();
+        CTX.fill();
+      }
     }
   } else {
     // Fallback to solid color if texture hasn't loaded yet
@@ -143,7 +289,7 @@ export function renderViewport(
         color = "#00ff88"; // Bright cyan-green for the exit
       } else if (tile === "#") {
         // Draw brick texture for walls
-        drawBrickTile(px, py, TILE_SIZE, mx, my);
+        drawBrickTile(px, py, TILE_SIZE, mx, my, maze, visible);
         continue;
       } else {
         if (visible && !visible.has(`${mx},${my}`)) {
