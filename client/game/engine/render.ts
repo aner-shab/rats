@@ -12,6 +12,11 @@ let gravelPattern: CanvasPattern | null = null;
 let gravelImage: HTMLImageElement | null = null;
 let gravelImageLoaded = false;
 
+// Steel door texture asset
+let doorPattern: CanvasPattern | null = null;
+let doorImage: HTMLImageElement | null = null;
+let doorImageLoaded = false;
+
 // Load the brick wall texture asset
 function loadBrickTexture(): Promise<HTMLImageElement> {
   return new Promise((resolve, reject) => {
@@ -50,12 +55,34 @@ function loadGravelTexture(): Promise<HTMLImageElement> {
   });
 }
 
+// Load the steel door texture asset
+function loadDoorTexture(): Promise<HTMLImageElement> {
+  return new Promise((resolve, reject) => {
+    if (doorImage && doorImageLoaded) {
+      resolve(doorImage);
+      return;
+    }
+
+    const img = new Image();
+    img.onload = () => {
+      doorImage = img;
+      doorImageLoaded = true;
+      resolve(img);
+    };
+    img.onerror = reject;
+    img.src = '/assets/steel-door.svg';
+  });
+}
+
 // Initialize textures on module load
 loadBrickTexture().catch(err => {
   console.error('Failed to load brick texture:', err);
 });
 loadGravelTexture().catch(err => {
   console.error('Failed to load gravel texture:', err);
+});
+loadDoorTexture().catch(err => {
+  console.error('Failed to load door texture:', err);
 });
 
 export function resizeCanvas() {
@@ -356,6 +383,23 @@ export function drawPathTile(x: number, y: number, tileSize: number, mazeX: numb
   }
 }
 
+export function drawDoorTile(x: number, y: number, tileSize: number, mazeX: number, mazeY: number) {
+  if (doorImageLoaded && doorImage) {
+    // Draw the door image directly, scaled to fit the tile
+    CTX.drawImage(
+      doorImage,
+      Math.floor(x),
+      Math.floor(y),
+      Math.ceil(tileSize),
+      Math.ceil(tileSize)
+    );
+  } else {
+    // Fallback to bright green if texture hasn't loaded yet
+    CTX.fillStyle = "#00ff88";
+    CTX.fillRect(Math.floor(x), Math.floor(y), Math.ceil(tileSize), Math.ceil(tileSize));
+  }
+}
+
 export function renderViewport(
   maze: Maze,
   viewportX: number,
@@ -414,7 +458,7 @@ export function renderViewport(
 
       // Check if this is the exit tile
       if (maze.exit && mx === maze.exit.x && my === maze.exit.y) {
-        drawTile(px, py, "#00ff88", TILE_SIZE); // Bright cyan-green for the exit
+        drawDoorTile(px, py, TILE_SIZE, mx, my); // Steel door texture for the exit
       } else if (tile === "#") {
         // Draw brick texture for walls
         drawBrickTile(px, py, TILE_SIZE, mx, my, maze, visible);
