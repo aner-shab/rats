@@ -67,36 +67,36 @@ export function drawBrickTile(x: number, y: number, tileSize: number, mazeX: num
     if (brickPattern) {
       // Save context state
       CTX.save();
-      
+
       // Check adjacent tiles to determine which corners to cut
       const hasPathAbove = maze.tiles[mazeY - 1]?.[mazeX] && maze.tiles[mazeY - 1][mazeX] !== "#";
       const hasPathBelow = maze.tiles[mazeY + 1]?.[mazeX] && maze.tiles[mazeY + 1][mazeX] !== "#";
       const hasPathLeft = maze.tiles[mazeY]?.[mazeX - 1] && maze.tiles[mazeY][mazeX - 1] !== "#";
       const hasPathRight = maze.tiles[mazeY]?.[mazeX + 1] && maze.tiles[mazeY][mazeX + 1] !== "#";
-      
+
       // Check diagonal tiles - don't cut corners if there's a wall diagonally
       const hasWallTopLeft = maze.tiles[mazeY - 1]?.[mazeX - 1] === "#";
       const hasWallTopRight = maze.tiles[mazeY - 1]?.[mazeX + 1] === "#";
       const hasWallBottomRight = maze.tiles[mazeY + 1]?.[mazeX + 1] === "#";
       const hasWallBottomLeft = maze.tiles[mazeY + 1]?.[mazeX - 1] === "#";
-      
+
       // Randomly decide to cut each corner (only if BOTH adjacent sides have paths AND no diagonal wall)
       const cutSize = tileSize * 0.2; // Size of the corner cut
       const cutTopLeft = (hasPathAbove && hasPathLeft && !hasWallTopLeft) && positionHash(mazeX, mazeY) > 0.5;
       const cutTopRight = (hasPathAbove && hasPathRight && !hasWallTopRight) && positionHash(mazeX + 1, mazeY) > 0.5;
       const cutBottomRight = (hasPathBelow && hasPathRight && !hasWallBottomRight) && positionHash(mazeX + 1, mazeY + 1) > 0.5;
       const cutBottomLeft = (hasPathBelow && hasPathLeft && !hasWallBottomLeft) && positionHash(mazeX, mazeY + 1) > 0.5;
-      
+
       // Create path with angled corners
       CTX.beginPath();
-      
+
       // Start from top edge, accounting for top-left corner
       if (cutTopLeft) {
         CTX.moveTo(x + cutSize, y);
       } else {
         CTX.moveTo(x, y);
       }
-      
+
       // Top edge to top-right corner
       if (cutTopRight) {
         CTX.lineTo(x + tileSize - cutSize, y);
@@ -104,7 +104,7 @@ export function drawBrickTile(x: number, y: number, tileSize: number, mazeX: num
       } else {
         CTX.lineTo(x + tileSize, y);
       }
-      
+
       // Right edge to bottom-right corner
       if (cutBottomRight) {
         CTX.lineTo(x + tileSize, y + tileSize - cutSize);
@@ -112,7 +112,7 @@ export function drawBrickTile(x: number, y: number, tileSize: number, mazeX: num
       } else {
         CTX.lineTo(x + tileSize, y + tileSize);
       }
-      
+
       // Bottom edge to bottom-left corner
       if (cutBottomLeft) {
         CTX.lineTo(x + cutSize, y + tileSize);
@@ -120,7 +120,7 @@ export function drawBrickTile(x: number, y: number, tileSize: number, mazeX: num
       } else {
         CTX.lineTo(x, y + tileSize);
       }
-      
+
       // Left edge to top-left corner
       if (cutTopLeft) {
         CTX.lineTo(x, y + cutSize);
@@ -128,7 +128,7 @@ export function drawBrickTile(x: number, y: number, tileSize: number, mazeX: num
       } else {
         CTX.lineTo(x, y);
       }
-      
+
       CTX.closePath();
       CTX.clip();
 
@@ -143,11 +143,11 @@ export function drawBrickTile(x: number, y: number, tileSize: number, mazeX: num
 
       // Restore context state
       CTX.restore();
-      
+
       // Fill the cut corners with path color or black based on visibility
       // Corner is black only if the adjacent tiles are not visible
       const seamFix = 1.0; // Generous overlap to prevent black seams
-      
+
       if (cutTopLeft) {
         let cornerColor = "#aaa";
         if (visibleTiles) {
@@ -165,7 +165,7 @@ export function drawBrickTile(x: number, y: number, tileSize: number, mazeX: num
         CTX.closePath();
         CTX.fill();
       }
-      
+
       if (cutTopRight) {
         let cornerColor = "#aaa";
         if (visibleTiles) {
@@ -183,7 +183,7 @@ export function drawBrickTile(x: number, y: number, tileSize: number, mazeX: num
         CTX.closePath();
         CTX.fill();
       }
-      
+
       if (cutBottomRight) {
         let cornerColor = "#aaa";
         if (visibleTiles) {
@@ -201,7 +201,7 @@ export function drawBrickTile(x: number, y: number, tileSize: number, mazeX: num
         CTX.closePath();
         CTX.fill();
       }
-      
+
       if (cutBottomLeft) {
         let cornerColor = "#aaa";
         if (visibleTiles) {
