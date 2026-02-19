@@ -458,13 +458,21 @@ export function renderViewport(
 
       // Check if this is the exit tile
       if (maze.exit && mx === maze.exit.x && my === maze.exit.y) {
+        // Exit should be visible if it's in the visible set or adjacent to visible tiles
+        if (visible && !visible.has(`${mx},${my}`) && !isWallAdjacent(mx, my)) {
+          continue;
+        }
         drawDoorTile(px, py, TILE_SIZE, mx, my); // Steel door texture for the exit
       } else if (tile === "#") {
+        // Walls are visible if adjacent to visible path tiles
+        if (visible && !isWallAdjacent(mx, my)) {
+          continue;
+        }
         // Draw brick texture for walls
         drawBrickTile(px, py, TILE_SIZE, mx, my, maze, visible);
       } else {
+        // Path tiles must be in the visible set
         if (visible && !visible.has(`${mx},${my}`)) {
-          // Skip black tiles for now, draw them after subjects
           continue;
         }
         // Draw gravel texture for paths
